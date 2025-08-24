@@ -5,6 +5,18 @@ This repository contains the `castorsky.opensearch` Ansible Collection.
 <!--start requires_ansible-->
 <!--end requires_ansible-->
 
+## Development
+
+To start developing with this collection you can use a single-node deployment of OpenSearch in a container:
+```shell
+export OPENSEARCH_PASSWORD=myStrongPassword123!
+podman pull docker.io/opensearchproject/opensearch:3.2.0
+podman run -d -p 9200:9200 -p 9600:9600 \
+  -e OPENSEARCH_INITIAL_ADMIN_PASSWORD=$OPENSEARCH_PASSWORD \
+  -e "discovery.type=single-node" \
+  docker.io/opensearchproject/opensearch:3.2.0
+```
+
 ## External requirements
 
 Some modules and plugins require external libraries. Please check the
