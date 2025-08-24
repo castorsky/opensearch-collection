@@ -8,12 +8,12 @@
 from __future__ import absolute_import, annotations, division, print_function
 
 DOCUMENTATION = """
-    module: opensearch_tenant
+    module: opensearch_role
     author: Castor Sky (@castorsky)
     version_added: "0.1.0"
-    short_description: Manage tenants in OpenSearch cluster.
+    short_description: Manage roles in OpenSearch cluster.
     description:
-      - Module manages (creates/updates/deletes) tenants in OpenSearch cluster.
+      - Module manages (creates/updates/deletes) roles in OpenSearch cluster.
     options:
       name:
         description: Value specified here is appended to the Hello message.
@@ -36,7 +36,7 @@ import traceback
 from ansible.module_utils.basic import AnsibleModule, env_fallback, missing_required_lib  # type: ignore
 
 # import pydevd_pycharm
-# pydevd_pycharm.settrace('localhost', port=12499, stdout_to_server=True, stderr_to_server=True)
+# pydevd_pycharm.settrace('localhost', port=12877, stdout_to_server=True, stderr_to_server=True)
 
 if TYPE_CHECKING:
     from typing import Callable
@@ -81,6 +81,9 @@ def main() -> None:
                               ),
         name=dict(type='str', required=True),
         description=dict(type='str', default=''),
+        cluster_permissions=dict(type='list', default=[]),
+        index_permissions=dict(type='list', default=[]),
+        tenant_permissions=dict(type='list', default=[]),
         state=dict(type='str', choices=['present', 'absent'], default='present'),
     )
     module = AnsibleModule(
@@ -99,37 +102,43 @@ def main() -> None:
         use_ssl=module.params['api_use_ssl'],
         verify_certs=module.params['api_verify_certs'],
     )
-    tenant_name = module.params['name']
-    tenant_description = module.params['description']
+    role_name = module.params['name']
+    role_parameters = {
+        'description': module.params['description'],
+        'cluster_permissions': module.params['cluster_permissions'],
+        'index_permissions': module.params['index_permissions'],
+        'tenant_permissions': module.params['tenant_permissions'],
+    }
 
-    # Get tenants
     changed_flag = False
     module_result = None
-    existent_tenants = c.security.get_tenants()
+    existent_roles = c.security.get_roles()
     if module.params['state'] == 'present':
-        if tenant_name not in existent_tenants:
-            module_result = c.security.create_tenant(
-                tenant=tenant_name,
-                body={
-                    'description': tenant_description,
-                }
+        if role_name not in existent_roles:
+            module_result = c.security.create_role(
+                role=role_name,
+                body=role_parameters,
             )
             changed_flag = True
-        elif tenant_description != existent_tenants[tenant_name].get('description', ''):
-            module_result = c.security.patch_tenants(
-                body=[{
-                    'op': 'replace',
-                    'path': f'/{tenant_name}',
-                    'value': {
-                        'description': tenant_description,
-                    }
-                }]
-            )
-            changed_flag = True
+        else:
+            role_differs = False
+            for p in role_parameters:
+                if role_parameters[p] != existent_roles[role_name].get(p, ''):
+                    role_differs = True
+                    break
+            if role_differs:
+                module_result = c.security.patch_roles(
+                    body=[{
+                        'op': 'replace',
+                        'path': f'/{role_name}',
+                        'value': role_parameters,
+                    }]
+                )
+                changed_flag = True
     elif module.params['state'] == 'absent':
-        if tenant_name in existent_tenants:
-            module_result = c.security.delete_tenant(
-                tenant=tenant_name,
+        if role_name in existent_roles:
+            module_result = c.security.delete_role(
+                role=role_name,
             )
             changed_flag = True
 
