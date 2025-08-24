@@ -1,0 +1,39 @@
+[project]
+name = "opensearch-collection"
+version = "0.1.0"
+description = ""
+authors = [
+    { name = "Castor Sky", email = "csky57@gmail.com" }
+]
+license = { file = "LICENSE" }
+readme = "README.md"
+requires-python = ">=3.11,<4"
+dependencies = [
+    "ansible-core (==2.18.6)",
+    "opensearch-py (==3.0.0)",
+    "requests (==2.32.5)"
+]
+
+[tool.poetry]
+package-mode = false
+
+[tool.poetry.group.dev.dependencies]
+ansible-dev-tools = "25.5.2"
+molecule = "25.7.0"
+
+[tool.poetry.group.test.dependencies]
+pytest-ansible = "25.8.0"
+pytest-xdist = "3.8.0"
+molecule = "25.7.0"
+
+[tool.black]
+line-length = 100
+
+[tool.pytest.ini_options]
+addopts = ["-vvv", "-n", "2", "--log-level", "WARNING", "--color", "yes"]
+filterwarnings = ['ignore:AnsibleCollectionFinder has already been configured']
+testpaths = ["tests"]
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
