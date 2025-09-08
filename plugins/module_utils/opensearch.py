@@ -62,18 +62,33 @@ def opensearch_auth_argument_spec():
         ),
     )
 
-
 class OpenSearchModule(AnsibleModule):
-    def __init__(self, argument_spec: Dict, **kwargs):
+    def __init__(self, **kwargs):
+        argument_spec = kwargs.pop('argument_spec', {})
         argument_spec.update(opensearch_auth_argument_spec())
-        super(OpenSearchModule, self).__init__(argument_spec=argument_spec, **kwargs)
+        required_together = kwargs.pop('required_together', [])
+        required_together.extend([
+            ('api_username', 'api_password'),
+            ('api_admin_cert_file', 'api_admin_key_file'),
+        ])
+        required_one_of = kwargs.pop('required_one_of', [])
+        required_one_of.extend([
+            ('api_password', 'api_admin_cert_file'),
+        ])
+
+        super(OpenSearchModule, self).__init__(
+            argument_spec=argument_spec,
+            required_together=required_together,
+            required_one_of=required_one_of,
+            **kwargs
+        )
 
         if not OPENSEARCH_MODULE_OK:
             self.fail_json(msd=missing_required_lib('opensearchpy'), exception=OPENSEARCH_IMPORT_FAIL)
 
-        os_api = self._connect()
+        self.os = self._connect()
         try:
-            os_api.info()
+            self.os.info()
         except Exception as e:
             self.fail_json(msg='%s' % e, exception=traceback.format_exc())
 

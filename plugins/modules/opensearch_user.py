@@ -20,15 +20,26 @@ DOCUMENTATION = """
         type: str
       force:
         description:
-          - Change password or hash to the specified on every run.
-          - Has no effect if used with superadmin key/certificate.
+          - Replace password or hash with the specified value. All other attributes will be replaced too.
+          - Password will not be updated when O(force=false) and other attributes have not changed.
         type: bool
         default: False
 """
 
 EXAMPLES = """
 # sample_module module example
-
+- name: Create OpenSearch user
+  castorsky.opensearch.opensearch_user:
+    name: "checker-user"
+    password: "#v3DWeSVDtD2~eqm1"
+    description: "Checker User"
+    opendistro_security_roles:
+      - all_access
+    attributes:
+      shell: "/bin/tcsh"
+      home: "/home/checker"
+    state: present
+    
 - name: Display a hello message
   ansible.builtin.debug:
     msg: "{{ 'ansible-creator' | sample_module }}"
@@ -36,15 +47,11 @@ EXAMPLES = """
 
 __metaclass__ = type  # pylint: disable=C0103
 
-from typing import TYPE_CHECKING
-
 from ansible_collections.castorsky.opensearch.plugins.module_utils.opensearch import OpenSearchModule
 
-import pydevd_pycharm
-pydevd_pycharm.settrace('localhost', port=12877, stdout_to_server=True, stderr_to_server=True)
 
-if TYPE_CHECKING:
-    from typing import Callable
+# import pydevd_pycharm
+# pydevd_pycharm.settrace('localhost', port=12877, stdout_to_server=True, stderr_to_server=True)
 
 
 def main() -> None:
@@ -70,39 +77,46 @@ def main() -> None:
         'opendistro_security_roles': module.params['opendistro_security_roles'],
         'backend_roles': module.params['backend_roles'],
         'attributes': module.params['attributes'],
+        'description': module.params['description'],
     }
+    user_parameters_with_pwd = user_parameters.copy()
+    if module.params['password']:
+        user_parameters_with_pwd['password'] = module.params['password']
+    elif module.params['password_hash']:
+        user_parameters_with_pwd['password_hash'] = module.params['password_hash']
 
     changed_flag = False
     module_result = None
-    existent_users = c.security.get_users()
-    # if module.params['state'] == 'present':
-    #     if role_name not in existent_roles:
-    #         module_result = c.security.create_role(
-    #             role=role_name,
-    #             body=role_parameters,
-    #         )
-    #         changed_flag = True
-    #     else:
-    #         role_differs = False
-    #         for p in role_parameters:
-    #             if role_parameters[p] != existent_roles[role_name].get(p, ''):
-    #                 role_differs = True
-    #                 break
-    #         if role_differs:
-    #             module_result = c.security.patch_roles(
-    #                 body=[{
-    #                     'op': 'replace',
-    #                     'path': f'/{role_name}',
-    #                     'value': role_parameters,
-    #                 }]
-    #             )
-    #             changed_flag = True
-    # elif module.params['state'] == 'absent':
-    #     if role_name in existent_roles:
-    #         module_result = c.security.delete_role(
-    #             role=role_name,
-    #         )
-    #         changed_flag = True
+    existent_users = module.os.security.get_users()
+
+    if module.params['state'] == 'present':
+        if user_name not in existent_users:
+            module_result = module.os.security.create_user(
+                username=user_name,
+                body=user_parameters_with_pwd,
+            )
+            changed_flag = True
+        else:
+            user_differs = True if module.params['force'] else False
+            for p in user_parameters:
+                if user_parameters[p] != existent_users[user_name].get(p, ''):
+                    user_differs = True
+                    break
+            if user_differs:
+                module_result = module.os.security.patch_users(
+                    body=[{
+                        'op': 'replace',
+                        'path': f'/{user_name}',
+                        'value': user_parameters_with_pwd,
+                    }]
+                )
+                changed_flag = True
+    elif module.params['state'] == 'absent':
+        if user_name in existent_users:
+            module_result = module.os.security.delete_user(
+                username=user_name,
+            )
+            changed_flag = True
 
     result = {'changed': changed_flag, 'content': module_result}
     module.exit_json(**result)
