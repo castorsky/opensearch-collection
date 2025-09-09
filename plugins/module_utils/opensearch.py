@@ -62,6 +62,7 @@ def opensearch_auth_argument_spec():
         ),
     )
 
+
 class OpenSearchModule(AnsibleModule):
     def __init__(self, **kwargs):
         argument_spec = kwargs.pop('argument_spec', {})
@@ -116,3 +117,55 @@ class OpenSearchModule(AnsibleModule):
             })
 
         return OpenSearch(**connection_params)
+
+    def default_passthrough(self, api_group: str, object_type: str, object_params: List[str]) -> Tuple[
+        bool, Union[Dict, None]]:
+        changed_flag = False
+        module_result = None
+
+        object_name = self.params['name']
+        # Sometimes (e.g. in 'role_mapping') the name field is not equal
+        # the object type and need to be mutated.
+        object_name_field = object_type if object_type != 'role_mapping' else 'role'
+        object_parameters = {param: self.params[param] for param in object_params}
+
+        api_group_callable = getattr(self.os, api_group)
+        multiple_objects_getter = getattr(api_group_callable, f'get_{object_type}s')
+        object_creator = getattr(api_group_callable, f'create_{object_type}')
+        multiple_objects_patcher = getattr(api_group_callable, f'patch_{object_type}s')
+        object_remover = getattr(api_group_callable, f'delete_{object_type}')
+
+        existent_objects = multiple_objects_getter()
+
+        if self.params['state'] == 'present':
+            if object_name not in existent_objects:
+                creator_args = {
+                    object_name_field: object_name,
+                    'body': object_parameters,
+                }
+                module_result = object_creator(**creator_args)
+                changed_flag = True
+            else:
+                object_differs = False
+                for p in object_parameters:
+                    if object_parameters[p] != existent_objects[object_name].get(p, ''):
+                        object_differs = True
+                        break
+                if object_differs:
+                    module_result = multiple_objects_patcher(
+                        body=[{
+                            'op': 'replace',
+                            'path': f'/{object_name}',
+                            'value': object_parameters,
+                        }]
+                    )
+                    changed_flag = True
+        elif self.params['state'] == 'absent':
+            if object_name in existent_objects:
+                remover_args = {
+                    object_name_field: object_name,
+                }
+                module_result = object_remover(**remover_args)
+                changed_flag = True
+
+        return changed_flag, module_result
