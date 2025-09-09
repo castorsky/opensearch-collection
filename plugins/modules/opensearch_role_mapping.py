@@ -7,10 +7,8 @@
 
 from __future__ import absolute_import, annotations, division, print_function
 
-from readline import backend
-
 DOCUMENTATION = """
-    module: opensearch_user
+    module: opensearch_role_mapping
     author: Castor Sky (@castorsky)
     version_added: "0.1.0"
     short_description: Manage users in OpenSearch cluster.
@@ -44,18 +42,14 @@ __metaclass__ = type  # pylint: disable=C0103
 from ansible_collections.castorsky.opensearch.plugins.module_utils.opensearch import OpenSearchModule
 
 
-# import pydevd_pycharm
-# pydevd_pycharm.settrace('localhost', port=12877, stdout_to_server=True, stderr_to_server=True)
-
-
 def main() -> None:
     module_argument_spec = dict(
         name=dict(type='str', required=True),
-        description=dict(type='str', default=''),
         hosts=dict(type='list', default=[]),
         users=dict(type='list', default=[]),
         backend_roles=dict(type='list', default=[]),
         state=dict(type='str', choices=['present', 'absent'], default='present'),
+        description=dict(type='str', default=''),
     )
 
     module = OpenSearchModule(

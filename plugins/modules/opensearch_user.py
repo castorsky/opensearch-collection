@@ -50,14 +50,9 @@ __metaclass__ = type  # pylint: disable=C0103
 from ansible_collections.castorsky.opensearch.plugins.module_utils.opensearch import OpenSearchModule
 
 
-# import pydevd_pycharm
-# pydevd_pycharm.settrace('localhost', port=12877, stdout_to_server=True, stderr_to_server=True)
-
-
 def main() -> None:
     module_argument_spec = dict(
         name=dict(type='str', required=True),
-        description=dict(type='str', default=''),
         password=dict(type='str', no_log=True),
         password_hash=dict(type='str', no_log=True),
         force=dict(type='bool', default=False),
@@ -65,6 +60,7 @@ def main() -> None:
         backend_roles=dict(type='list', default=[]),
         attributes=dict(type='dict', default={}),
         state=dict(type='str', choices=['present', 'absent'], default='present'),
+        description=dict(type='str', default=''),
     )
 
     module = OpenSearchModule(

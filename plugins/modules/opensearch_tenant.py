@@ -30,105 +30,54 @@ EXAMPLES = """
 
 __metaclass__ = type  # pylint: disable=C0103
 
-from typing import TYPE_CHECKING
-import traceback
-
-from ansible.module_utils.basic import AnsibleModule, env_fallback, missing_required_lib  # type: ignore
-
-# import pydevd_pycharm
-# pydevd_pycharm.settrace('localhost', port=12499, stdout_to_server=True, stderr_to_server=True)
-
-if TYPE_CHECKING:
-    from typing import Callable
-
-OPENSEARCH_IMPORT_FAIL = None
-try:
-    from opensearchpy import OpenSearch
-
-    OPENSEARCH_MODULE_OK = True
-except ImportError:
-    OPENSEARCH_MODULE_OK = False
-    OPENSEARCH_IMPORT_FAIL = traceback.format_exc()
+from ansible_collections.castorsky.opensearch.plugins.module_utils.opensearch import OpenSearchModule
 
 
 def main() -> None:
-    """entry point for module execution"""
-    argument_spec = dict(
-        api_host=dict(type='str',
-                      # required=True,
-                      fallback=(env_fallback, ['OPENSEARCH_API_HOST']),
-                      ),
-        api_port=dict(type='int',
-                      # required=True,
-                      fallback=(env_fallback, ['OPENSEARCH_API_PORT']),
-                      ),
-        api_username=dict(type='str',
-                          # required=True,
-                          fallback=(env_fallback, ['OPENSEARCH_API_USERNAME']),
-                          ),
-        api_password=dict(type='str',
-                          # required=True,
-                          no_log=True,
-                          fallback=(env_fallback, ['OPENSEARCH_API_PASSWORD']),
-                          ),
-        api_use_ssl=dict(type='bool',
-                         default=True,
-                         fallback=(env_fallback, ['OPENSEARCH_API_USE_SSL']),
-                         ),
-        api_verify_certs=dict(type='bool',
-                              default=True,
-                              fallback=(env_fallback, ['OPENSEARCH_API_VERIFY_CERTS']),
-                              ),
+    module_argument_spec = dict(
         name=dict(type='str', required=True),
-        description=dict(type='str', default=''),
         state=dict(type='str', choices=['present', 'absent'], default='present'),
-    )
-    module = AnsibleModule(
-        argument_spec=argument_spec,
+        description=dict(type='str', default=''),
     )
 
-    if not OPENSEARCH_MODULE_OK:
-        module.fail_json(msd=missing_required_lib('opensearchpy'), exception=OPENSEARCH_IMPORT_FAIL)
-
-    c = OpenSearch(
-        hosts=[{'host': module.params['api_host'], 'port': module.params['api_port']}],
-        http_auth=(
-            module.params['api_username'],
-            module.params['api_password'],
-        ),
-        use_ssl=module.params['api_use_ssl'],
-        verify_certs=module.params['api_verify_certs'],
+    module = OpenSearchModule(
+        argument_spec=module_argument_spec,
     )
+
     tenant_name = module.params['name']
-    tenant_description = module.params['description']
+    tenant_parameters = {
+        'description': module.params['description'],
+    }
 
-    # Get tenants
     changed_flag = False
     module_result = None
-    existent_tenants = c.security.get_tenants()
+    existent_tenants = module.os.security.get_tenants()
+
     if module.params['state'] == 'present':
         if tenant_name not in existent_tenants:
-            module_result = c.security.create_tenant(
+            module_result = module.os.security.create_tenant(
                 tenant=tenant_name,
-                body={
-                    'description': tenant_description,
-                }
+                body=tenant_parameters,
             )
             changed_flag = True
-        elif tenant_description != existent_tenants[tenant_name].get('description', ''):
-            module_result = c.security.patch_tenants(
-                body=[{
-                    'op': 'replace',
-                    'path': f'/{tenant_name}',
-                    'value': {
-                        'description': tenant_description,
-                    }
-                }]
-            )
-            changed_flag = True
+        else:
+            tenant_differs = False
+            for p in tenant_parameters:
+                if tenant_parameters[p] != existent_tenants[tenant_name].get(p, ''):
+                    tenant_differs = True
+                    break
+            if tenant_differs:
+                module_result = module.os.security.patch_tenants(
+                    body=[{
+                        'op': 'replace',
+                        'path': f'/{tenant_name}',
+                        'value': tenant_parameters,
+                    }]
+                )
+                changed_flag = True
     elif module.params['state'] == 'absent':
         if tenant_name in existent_tenants:
-            module_result = c.security.delete_tenant(
+            module_result = module.os.security.delete_tenant(
                 tenant=tenant_name,
             )
             changed_flag = True
