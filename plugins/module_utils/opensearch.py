@@ -22,6 +22,11 @@ except ImportError:
     OPENSEARCH_MODULE_OK = False
     OPENSEARCH_IMPORT_FAIL = traceback.format_exc()
 
+OBJECT_FIELD_MAPPING = {
+    'user': 'username',
+    'role_mapping': 'role'
+}
+
 
 def opensearch_auth_argument_spec():
     return dict(
@@ -93,6 +98,9 @@ class OpenSearchModule(AnsibleModule):
         except Exception as e:
             self.fail_json(msg='%s' % e, exception=traceback.format_exc())
 
+        self.changed = False
+        self.result = None
+
     def _connect(self) -> OpenSearch:
         connection_params = {
             'hosts': [{
@@ -118,54 +126,100 @@ class OpenSearchModule(AnsibleModule):
 
         return OpenSearch(**connection_params)
 
-    def default_passthrough(self, api_group: str, object_type: str, object_params: List[str]) -> Tuple[
-        bool, Union[Dict, None]]:
-        changed_flag = False
-        module_result = None
-
-        object_name = self.params['name']
-        # Sometimes (e.g. in 'role_mapping') the name field is not equal
-        # the object type and need to be mutated.
-        object_name_field = object_type if object_type != 'role_mapping' else 'role'
-        object_parameters = {param: self.params[param] for param in object_params}
-
-        api_group_callable = getattr(self.os, api_group)
-        multiple_objects_getter = getattr(api_group_callable, f'get_{object_type}s')
-        object_creator = getattr(api_group_callable, f'create_{object_type}')
-        multiple_objects_patcher = getattr(api_group_callable, f'patch_{object_type}s')
-        object_remover = getattr(api_group_callable, f'delete_{object_type}')
-
-        existent_objects = multiple_objects_getter()
+    def default_sequence(self, api_group: str, object_type: str, object_params: List[str]):
+        self._setup_executor(api_group, object_type, object_params)
 
         if self.params['state'] == 'present':
-            if object_name not in existent_objects:
-                creator_args = {
-                    object_name_field: object_name,
-                    'body': object_parameters,
-                }
-                module_result = object_creator(**creator_args)
-                changed_flag = True
+            if self._object_name not in self._existent_objects:
+                self._create_absent_object()
             else:
-                object_differs = False
-                for p in object_parameters:
-                    if object_parameters[p] != existent_objects[object_name].get(p, ''):
-                        object_differs = True
-                        break
-                if object_differs:
-                    module_result = multiple_objects_patcher(
-                        body=[{
-                            'op': 'replace',
-                            'path': f'/{object_name}',
-                            'value': object_parameters,
-                        }]
-                    )
-                    changed_flag = True
+                self._update_existent_object()
         elif self.params['state'] == 'absent':
-            if object_name in existent_objects:
-                remover_args = {
-                    object_name_field: object_name,
-                }
-                module_result = object_remover(**remover_args)
-                changed_flag = True
+            if self._object_name in self._existent_objects:
+                self._remove_existing_object()
 
-        return changed_flag, module_result
+    def user_sequence(self, api_group: str, object_type: str, object_params: List[str]):
+        self._setup_executor(api_group, object_type, object_params)
+
+        user_parameters_with_pwd = self._object_parameters.copy()
+        if self.params['password']:
+            user_parameters_with_pwd['password'] = self.params['password']
+        elif self.params['password_hash']:
+            user_parameters_with_pwd['password_hash'] = self.params['password_hash']
+
+        if self.params['state'] == 'present':
+            if self._object_name not in self._existent_objects:
+                # Do not want to define one more function with one changed line.
+                # It seems that self._object_parameter is used the last time
+                # so it is safe to rewrite it with password parameters.
+                self._object_parameters = user_parameters_with_pwd
+                self._create_absent_object()
+            else:
+                self._update_existent_user(user_parameters_with_pwd)
+        elif self.params['state'] == 'absent':
+            if self._object_name in self._existent_objects:
+                self._remove_existing_object()
+
+    def _setup_executor(self, api_group, object_type, object_params):
+        self._object_name = self.params['name']
+
+        self._object_name_field = OBJECT_FIELD_MAPPING[object_type] \
+            if object_type in OBJECT_FIELD_MAPPING else object_type
+
+        self._object_parameters = {param: self.params[param] for param in object_params}
+
+        # Get opensearch_py methods to work with this particular object type (role, user, etc.).
+        api_group_callable = getattr(self.os, api_group)
+        self._multiple_objects_getter = getattr(api_group_callable, f'get_{object_type}s')
+        self._object_creator = getattr(api_group_callable, f'create_{object_type}')
+        self._multiple_objects_patcher = getattr(api_group_callable, f'patch_{object_type}s')
+        self._object_remover = getattr(api_group_callable, f'delete_{object_type}')
+
+        self._existent_objects = self._multiple_objects_getter()
+
+    def _create_absent_object(self):
+        creator_args = {
+            self._object_name_field: self._object_name,
+            'body': self._object_parameters,
+        }
+        self.result = self._object_creator(**creator_args)
+        self.changed = True
+
+    def _update_existent_object(self):
+        object_differs = False
+        for p in self._object_parameters:
+            if self._object_parameters[p] != self._existent_objects[self._object_name].get(p, ''):
+                object_differs = True
+                break
+        if object_differs:
+            self.result = self._multiple_objects_patcher(
+                body=[{
+                    'op': 'replace',
+                    'path': f'/{self._object_name}',
+                    'value': self._object_parameters,
+                }]
+            )
+            self.changed = True
+
+    def _update_existent_user(self, user_parameters_with_pwd):
+        user_differs = True if self.params['force'] else False
+        for p in self._object_parameters:
+            if self._object_parameters[p] != self._existent_objects[self._object_name].get(p, ''):
+                user_differs = True
+                break
+        if user_differs:
+            self.result = self._multiple_objects_patcher(
+                body=[{
+                    'op': 'replace',
+                    'path': f'/{self._object_name}',
+                    'value': user_parameters_with_pwd,
+                }]
+            )
+            self.changed = True
+
+    def _remove_existing_object(self):
+        remover_args = {
+            self._object_name_field: self._object_name,
+        }
+        self.result = self._object_remover(**remover_args)
+        self.changed = True
