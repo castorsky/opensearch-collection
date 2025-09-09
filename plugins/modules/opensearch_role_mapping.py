@@ -56,46 +56,13 @@ def main() -> None:
         argument_spec=module_argument_spec,
     )
 
-    role_name = module.params['name']
-    role_mapping_parameters = {
-        'hosts': module.params['hosts'],
-        'users': module.params['users'],
-        'backend_roles': module.params['backend_roles'],
-        'description': module.params['description'],
-    }
+    mandatory_params = ['hosts', 'users', 'backend_roles', 'description']
 
-    changed_flag = False
-    module_result = None
-    existent_role_mappings = module.os.security.get_role_mappings()
-
-    if module.params['state'] == 'present':
-        if role_name not in existent_role_mappings:
-            module_result = module.os.security.create_role_mapping(
-                role=role_name,
-                body=role_mapping_parameters,
-            )
-            changed_flag = True
-        else:
-            role_mapping_differs = False
-            for p in role_mapping_parameters:
-                if role_mapping_parameters[p] != existent_role_mappings[role_name].get(p, ''):
-                    role_mapping_differs = True
-                    break
-            if role_mapping_differs:
-                module_result = module.os.security.patch_role_mappings(
-                    body=[{
-                        'op': 'replace',
-                        'path': f'/{role_name}',
-                        'value': role_mapping_parameters,
-                    }]
-                )
-                changed_flag = True
-    elif module.params['state'] == 'absent':
-        if role_name in existent_role_mappings:
-            module_result = module.os.security.delete_role_mapping(
-                role=role_name,
-            )
-            changed_flag = True
+    changed_flag, module_result = module.default_passthrough(
+        api_group='security',
+        object_type='role_mapping',
+        object_params=mandatory_params,
+    )
 
     result = {'changed': changed_flag, 'content': module_result}
     module.exit_json(**result)

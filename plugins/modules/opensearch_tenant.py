@@ -44,43 +44,13 @@ def main() -> None:
         argument_spec=module_argument_spec,
     )
 
-    tenant_name = module.params['name']
-    tenant_parameters = {
-        'description': module.params['description'],
-    }
+    mandatory_params = ['description']
 
-    changed_flag = False
-    module_result = None
-    existent_tenants = module.os.security.get_tenants()
-
-    if module.params['state'] == 'present':
-        if tenant_name not in existent_tenants:
-            module_result = module.os.security.create_tenant(
-                tenant=tenant_name,
-                body=tenant_parameters,
-            )
-            changed_flag = True
-        else:
-            tenant_differs = False
-            for p in tenant_parameters:
-                if tenant_parameters[p] != existent_tenants[tenant_name].get(p, ''):
-                    tenant_differs = True
-                    break
-            if tenant_differs:
-                module_result = module.os.security.patch_tenants(
-                    body=[{
-                        'op': 'replace',
-                        'path': f'/{tenant_name}',
-                        'value': tenant_parameters,
-                    }]
-                )
-                changed_flag = True
-    elif module.params['state'] == 'absent':
-        if tenant_name in existent_tenants:
-            module_result = module.os.security.delete_tenant(
-                tenant=tenant_name,
-            )
-            changed_flag = True
+    changed_flag, module_result = module.default_passthrough(
+        api_group='security',
+        object_type='tenant',
+        object_params=mandatory_params,
+    )
 
     result = {'changed': changed_flag, 'content': module_result}
     module.exit_json(**result)

@@ -47,46 +47,13 @@ def main() -> None:
         argument_spec=module_argument_spec,
     )
 
-    role_name = module.params['name']
-    role_parameters = {
-        'cluster_permissions': module.params['cluster_permissions'],
-        'index_permissions': module.params['index_permissions'],
-        'tenant_permissions': module.params['tenant_permissions'],
-        'description': module.params['description'],
-    }
+    mandatory_params = ['cluster_permissions', 'index_permissions', 'tenant_permissions', 'description']
 
-    changed_flag = False
-    module_result = None
-    existent_roles = module.os.security.get_roles()
-
-    if module.params['state'] == 'present':
-        if role_name not in existent_roles:
-            module_result = module.os.security.create_role(
-                role=role_name,
-                body=role_parameters,
-            )
-            changed_flag = True
-        else:
-            role_differs = False
-            for p in role_parameters:
-                if role_parameters[p] != existent_roles[role_name].get(p, ''):
-                    role_differs = True
-                    break
-            if role_differs:
-                module_result = module.os.security.patch_roles(
-                    body=[{
-                        'op': 'replace',
-                        'path': f'/{role_name}',
-                        'value': role_parameters,
-                    }]
-                )
-                changed_flag = True
-    elif module.params['state'] == 'absent':
-        if role_name in existent_roles:
-            module_result = module.os.security.delete_role(
-                role=role_name,
-            )
-            changed_flag = True
+    changed_flag, module_result = module.default_passthrough(
+        api_group='security',
+        object_type='role',
+        object_params=mandatory_params,
+    )
 
     result = {'changed': changed_flag, 'content': module_result}
     module.exit_json(**result)
