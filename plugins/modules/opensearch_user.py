@@ -68,53 +68,10 @@ def main() -> None:
         required_one_of=[('password', 'password_hash')],
     )
 
-    user_name = module.params['name']
-    user_parameters = {
-        'opendistro_security_roles': module.params['opendistro_security_roles'],
-        'backend_roles': module.params['backend_roles'],
-        'attributes': module.params['attributes'],
-        'description': module.params['description'],
-    }
-    user_parameters_with_pwd = user_parameters.copy()
-    if module.params['password']:
-        user_parameters_with_pwd['password'] = module.params['password']
-    elif module.params['password_hash']:
-        user_parameters_with_pwd['password_hash'] = module.params['password_hash']
+    mandatory_params = ['opendistro_security_roles', 'backend_roles', 'attributes', 'description']
+    module.user_sequence(api_group='security', object_type='user', object_params=mandatory_params)
 
-    changed_flag = False
-    module_result = None
-    existent_users = module.os.security.get_users()
-
-    if module.params['state'] == 'present':
-        if user_name not in existent_users:
-            module_result = module.os.security.create_user(
-                username=user_name,
-                body=user_parameters_with_pwd,
-            )
-            changed_flag = True
-        else:
-            user_differs = True if module.params['force'] else False
-            for p in user_parameters:
-                if user_parameters[p] != existent_users[user_name].get(p, ''):
-                    user_differs = True
-                    break
-            if user_differs:
-                module_result = module.os.security.patch_users(
-                    body=[{
-                        'op': 'replace',
-                        'path': f'/{user_name}',
-                        'value': user_parameters_with_pwd,
-                    }]
-                )
-                changed_flag = True
-    elif module.params['state'] == 'absent':
-        if user_name in existent_users:
-            module_result = module.os.security.delete_user(
-                username=user_name,
-            )
-            changed_flag = True
-
-    result = {'changed': changed_flag, 'content': module_result}
+    result = {'changed': module.changed, 'content': module.result}
     module.exit_json(**result)
 
 

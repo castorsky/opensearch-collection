@@ -45,14 +45,9 @@ def main() -> None:
     )
 
     mandatory_params = ['description']
+    module.default_sequence(api_group='security', object_type='tenant', object_params=mandatory_params)
 
-    changed_flag, module_result = module.default_passthrough(
-        api_group='security',
-        object_type='tenant',
-        object_params=mandatory_params,
-    )
-
-    result = {'changed': changed_flag, 'content': module_result}
+    result = {'changed': module.changed, 'content': module.result}
     module.exit_json(**result)
 
 
