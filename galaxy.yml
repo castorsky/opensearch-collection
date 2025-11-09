@@ -18,8 +18,8 @@ tags:
   - collection
   - opensearch
 
-# TO-DO: maintain this list to reflect the collection's dependencies
-dependencies: ~
+dependencies:
+  ansible.netcommon: ">=8.2.0"
 
 repository: https://github.com/castorsky/opensearch-collection
 documentation: https://github.com/castorsky/opensearch-collection

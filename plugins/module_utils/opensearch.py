@@ -9,6 +9,7 @@ from __future__ import absolute_import, annotations, division, print_function
 
 __metaclass__ = type  # pylint: disable=C0103
 
+from ansible.module_utils.connection import Connection
 from ansible.module_utils.basic import AnsibleModule, env_fallback, missing_required_lib  # type: ignore
 from typing import Any, Dict, List, Optional, Tuple, Union
 import traceback
@@ -22,6 +23,7 @@ except ImportError:
     OPENSEARCH_MODULE_OK = False
     OPENSEARCH_IMPORT_FAIL = traceback.format_exc()
 
+# Remap some field names to synonyms to match OpenSearch API.
 OBJECT_FIELD_MAPPING = {
     'user': 'username',
     'role_mapping': 'role'
@@ -65,6 +67,10 @@ def opensearch_auth_argument_spec():
             type='str',
             fallback=(env_fallback, ['OPENSEARCH_API_ADMIN_KEY_FILE']),
         ),
+        api_timeout=dict(
+            type='int',
+            fallback=(env_fallback, ['OPENSEARCH_API_TIMEOUT']),
+        ),
     )
 
 
@@ -90,13 +96,21 @@ class OpenSearchModule(AnsibleModule):
         )
 
         if not OPENSEARCH_MODULE_OK:
-            self.fail_json(msd=missing_required_lib('opensearchpy'), exception=OPENSEARCH_IMPORT_FAIL)
+            self.fail_json(msg=missing_required_lib('opensearchpy'), exception=OPENSEARCH_IMPORT_FAIL)
 
-        self.os = self._connect()
+        connection = Connection(self._socket_path)
+
+        # Get the OpenSearch client from the connection plugin
         try:
-            self.os.info()
+            self.os = connection.client
         except Exception as e:
-            self.fail_json(msg='%s' % e, exception=traceback.format_exc())
+            self.fail_json(msg=f"Failed to get OpenSearch client from connection: {str(e)}")
+
+        # self.os = self._connect()
+        # try:
+        #     self.os.info()
+        # except Exception as e:
+        #     self.fail_json(msg='%s' % e, exception=traceback.format_exc())
 
         self.changed = False
         self.result = None
