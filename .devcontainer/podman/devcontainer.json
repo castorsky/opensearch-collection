@@ -1,6 +1,6 @@
 {
   "name": "ansible-dev-container-podman",
-  "image": "ghcr.io/ansible/community-ansible-dev-tools:latest",
+  "image": "ghcr.io/ansible/community-ansible-dev-tools:v25.12.0",
   "containerUser": "root",
   "runArgs": [
     "--cap-add=CAP_MKNOD",
@@ -25,10 +25,10 @@
     "source=${env:HOME}${env:USERPROFILE}/.config/git,target=/root/.config/git,type=bind,ro",
     "source=${env:HOME}${env:USERPROFILE}/.gitconfig,target=/root/.gitconfig,type=bind"
   ],
-  "postCreateCommand": "ade install -e .",
   "customizations": {
     "vscode": {
       "extensions": ["redhat.ansible", "redhat.vscode-redhat-account"]
     }
   }
 }
+// "postCreateCommand": "ade install -e .",

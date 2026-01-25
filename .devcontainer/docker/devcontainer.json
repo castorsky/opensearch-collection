@@ -1,6 +1,6 @@
 {
   "name": "ansible-dev-container-docker",
-  "image": "ghcr.io/ansible/community-ansible-dev-tools:latest",
+  "image": "ghcr.io/ansible/community-ansible-dev-tools:v25.12.0",
   "containerUser": "root",
   "runArgs": [
     "--security-opt",
