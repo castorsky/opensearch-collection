@@ -1,0 +1,11 @@
+- name: Test HTTPAPI modules
+  hosts: local_opensearch
+  gather_facts: false
+  tasks:
+    - name: Checker
+      castorsky.opensearch.opensearch_health_info:
+      register: result
+
+    - name: Debug
+      ansible.builtin.debug:
+        var: result
