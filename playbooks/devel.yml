@@ -1,5 +1,5 @@
 - name: Devel opensearch module
-  hosts: localhost
+  hosts: local_opensearch
   gather_facts: false
   tasks:
     - name: Test
@@ -9,21 +9,21 @@
         state: present
       register: checker
 
-    - name: Test2
-      castorsky.opensearch.opensearch_role:
-        name: "role-checker"
-        description: "Role for Checker"
-        cluster_permissions:
-          - "cluster_composite_ops"
-          - "indices_monitor"
-        state: absent
-      register: checker
+#     - name: Test2
+#       castorsky.opensearch.opensearch_role:
+#         name: "role-checker"
+#         description: "Role for Checker"
+#         cluster_permissions:
+#           - "cluster_composite_ops"
+#           - "indices_monitor"
+#         state: absent
+#       register: checker
 
-#    - name: Save
-#      ansible.builtin.copy:
-#        content: "{{ checker }}"
-#        dest: "debug.json"
-#        owner: "castor"
+# #    - name: Save
+# #      ansible.builtin.copy:
+# #        content: "{{ checker }}"
+# #        dest: "debug.json"
+# #        owner: "castor"
 
     - name: Debug
       ansible.builtin.debug:

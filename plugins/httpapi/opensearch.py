@@ -6,7 +6,7 @@ from __future__ import absolute_import, division, print_function
 
 __metaclass__ = type
 
-DOCUMENTATION = '''
+DOCUMENTATION = """
 ---
 author:
 - Castor Sky (@castorsky)
@@ -22,7 +22,7 @@ options:
       - These headers are applied first, and can be overridden by plugin-specific headers like 'Authorization'.
     vars:
       - name: ansible_opensearch_http_headers
-'''
+"""
 
 import json
 
@@ -33,8 +33,8 @@ from ansible.module_utils.connection import ConnectionError
 from urllib.error import HTTPError
 
 BASE_HEADERS = {
-    'Content-Type': 'application/json',
-    'Accept': 'application/json',
+    "Content-Type": "application/json",
+    "Accept": "application/json",
 }
 
 
@@ -43,17 +43,19 @@ class HttpApi(HttpApiBase):
         """There is no privilege elevation method in OpenSearch API"""
         pass
 
-    def send_request(self, data, path="/", method='POST'):
+    def send_request(self, data, path="/", method="POST"):
         try:
             headers = BASE_HEADERS.copy()
             custom_headers = self.get_option("opensearch_http_headers")
             if isinstance(custom_headers, dict):
                 headers.update(custom_headers)
 
-            request_data = json.dumps(data) if data else '{}'
+            request_data = json.dumps(data) if data else "{}"
 
             self._display_request(method=method)
-            response, response_data = self.connection.send(path, request_data, method=method, headers=headers)
+            response, response_data = self.connection.send(
+                path, request_data, method=method, headers=headers
+            )
 
             response_value = self._get_response_value(response_data)
 
@@ -65,11 +67,9 @@ class HttpApi(HttpApiBase):
             self.connection.queue_message("vvv", "HTTPError: %s" % e)
             return e.code, to_text(e.read())
 
-    def _display_request(self, method='POST'):
+    def _display_request(self, method="POST"):
         self.connection.queue_message(
-            'vvvv',
-            'Web Services: %s %s'
-            % (method, self.connection._url)
+            "vvvv", "Web Services: %s %s" % (method, self.connection._url)
         )
 
     def _get_response_value(self, response_data):
@@ -80,4 +80,4 @@ class HttpApi(HttpApiBase):
             return json.loads(response_text) if response_text else {}
         # JSONDecodeError only available on Python 3.5+
         except ValueError:
-            raise ConnectionError('Invalid JSON response: %s' % response_text)
+            raise ConnectionError("Invalid JSON response: %s" % response_text)

@@ -28,7 +28,7 @@ EXAMPLES = """
 """
 
 RETURN = """
-message:
+health:
   description:
   - Information about cluster with health status.
   type: dict
