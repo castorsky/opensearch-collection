@@ -19,8 +19,9 @@
     "unmask=/sys/fs/cgroup",
     "--userns=host",
     "--hostname=ansible-dev-container",
-    "--env-file=.env"
+    "--env-file=${localWorkspaceFolder}/.env"
   ],
+  "postCreateCommand": "ade install -e .",
   "mounts": [
     "source=${env:HOME}${env:USERPROFILE}/.config/git,target=/root/.config/git,type=bind,ro",
     "source=${env:HOME}${env:USERPROFILE}/.gitconfig,target=/root/.gitconfig,type=bind"
@@ -31,4 +32,3 @@
     }
   }
 }
-// "postCreateCommand": "ade install -e .",

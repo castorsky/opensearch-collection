@@ -14,14 +14,14 @@
     "--security-opt",
     "apparmor=unconfined",
     "--hostname=ansible-dev-container",
-    "--env-file=.env"
-  ],
+    "--env-file=${localWorkspaceFolder}/.env"
+ ],
+  "postCreateCommand": "ade install -e .",
+  "updateRemoteUserUID": true,
   "mounts": [
     "source=${env:HOME}${env:USERPROFILE}/.config/git,target=/root/.config/git,type=bind,ro",
     "source=${env:HOME}${env:USERPROFILE}/.gitconfig,target=/root/.gitconfig,type=bind"
   ],
-  "postCreateCommand": "ade install -e .",
-  "updateRemoteUserUID": true,
   "customizations": {
     "vscode": {
       "extensions": ["redhat.ansible", "redhat.vscode-redhat-account"]
