@@ -1,6 +1,6 @@
 - name: Devel opensearch module
   hosts: localhost
-  gather_facts: False
+  gather_facts: false
   tasks:
     - name: Test
       castorsky.opensearch.opensearch_tenant:
