@@ -29,6 +29,9 @@ class OpenSearchModule(AnsibleModule):
         This method does error checking so method callers can trust the response.
         """
         try:
+            if not path.startswith("/"):
+                path = "/" + path
+
             code, response = self.connection.send_request(data, path, method)
 
             if code >= 400:
