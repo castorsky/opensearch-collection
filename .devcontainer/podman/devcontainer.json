@@ -18,10 +18,10 @@
     "--security-opt",
     "unmask=/sys/fs/cgroup",
     "--userns=host",
-    "--hostname=ansible-dev-container",
-    "--env-file=${localWorkspaceFolder}/.env"
+    "--hostname=ansible-dev-container"
   ],
-  "postCreateCommand": "ade install -e .",
+  "onCreateCommand": "pip install poetry; poetry config virtualenvs.in-project true",
+  "postCreateCommand": "poetry install --no-interaction; poetry run ade install --im restrictive -e .",
   "mounts": [
     "source=${env:HOME}${env:USERPROFILE}/.config/git,target=/root/.config/git,type=bind,ro",
     "source=${env:HOME}${env:USERPROFILE}/.gitconfig,target=/root/.gitconfig,type=bind"

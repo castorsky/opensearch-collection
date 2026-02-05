@@ -2,16 +2,21 @@
 name = "opensearch-collection"
 version = "0.1.0"
 description = ""
-authors = [
-    { name = "Castor Sky", email = "csky57@gmail.com" }
-]
+authors = [{ name = "Castor Sky", email = "csky57@gmail.com" }]
 license = { file = "LICENSE" }
 readme = "README.md"
 requires-python = ">=3.12,<3.14"
 dependencies = [
-    "ansible-core (==2.20.1)",
-    "opensearch-py (==3.0.0)",
-    "requests (==2.32.5)"
+    "ansible-core (==2.20.2)",
+    # netcommon dependencies
+    "requests (==2.32.5)",
+    "ansible-pylibssh (==1.3.0)",
+    "grpcio (==1.76.0)",
+    "paramiko (==4.0.0)",
+    "jxmlease (==1.0.3)",
+    "ncclient (==0.7.0)",
+    "protobuf (==6.33.5)",
+    "xmltodict (==1.0.2)",
 ]
 
 [tool.poetry]
@@ -22,7 +27,7 @@ ansible-dev-tools = "26.1.0"
 molecule = "25.12.0"
 
 [tool.poetry.group.test.dependencies]
-pytest-ansible = "25.12.0"
+pytest-ansible = "26.1.0"
 pytest-xdist = "3.8.0"
 molecule = "25.12.0"
 

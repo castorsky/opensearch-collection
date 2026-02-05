@@ -16,6 +16,12 @@
     "--hostname=ansible-dev-container"
  ],
   "updateRemoteUserUID": true,
+  "onCreateCommand": "pip install poetry; poetry config virtualenvs.in-project true",
+  "postCreateCommand": "poetry install --no-interaction; poetry run ade install --im restrictive -e .",
+  "mounts": [
+    "source=${env:HOME}${env:USERPROFILE}/.config/git,target=/root/.config/git,type=bind,ro",
+    "source=${env:HOME}${env:USERPROFILE}/.gitconfig,target=/root/.gitconfig,type=bind"
+  ],
   "customizations": {
     "vscode": {
       "extensions": ["redhat.ansible", "redhat.vscode-redhat-account"]
