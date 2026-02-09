@@ -15,6 +15,15 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 from ansible.module_utils.common.text.converters import to_text
 
 
+
+def params_differ(local_params: dict[Any, Any], remote_params: dict[Any, Any]) -> bool:
+    """Returns True if any record from local_params differs from corresponding record from remote_params."""
+    for key, value in local_params.items():
+        if remote_params.get(key, "") != value:
+            return True
+    return False
+
+
 class OpenSearchModule(AnsibleModule):
     def __init__(self, **kwargs):
         super(OpenSearchModule, self).__init__(**kwargs)
@@ -23,7 +32,9 @@ class OpenSearchModule(AnsibleModule):
         self.changed = False
         self.result = None
 
-    def opensearch_request(self, data: dict, path: str, method: str) -> dict[Any, Any] | None:
+    def opensearch_request(
+        self, data: dict | list | None, path: str, method: str
+    ) -> dict[Any, Any] | None:
         """
         Perform an API request to the OpenSearch cluster.
         This method does error checking so method callers can trust the response.
@@ -36,7 +47,7 @@ class OpenSearchModule(AnsibleModule):
 
             if code >= 400:
                 self.fail_json(msg=f"HTTP Error occurred: {code} {response}")
-            
+
             if response is None:
                 self.fail_json(msg="Error: Empty response from the OpenSearch cluster.")
 

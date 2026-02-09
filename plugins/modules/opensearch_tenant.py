@@ -32,7 +32,12 @@ __metaclass__ = type  # pylint: disable=C0103
 
 from ansible_collections.castorsky.opensearch.plugins.module_utils.opensearch import (
     OpenSearchModule,
+    params_differ,
 )
+
+# import pydevd_pycharm
+#
+# pydevd_pycharm.settrace("localhost", port=43555, stdout_to_server=True, stderr_to_server=True)
 
 
 def main() -> None:
@@ -45,33 +50,36 @@ def main() -> None:
     module = OpenSearchModule(
         argument_spec=module_argument_spec,
     )
+    api_prefix = "/_plugins/_security/api/tenants/"
 
     tenant_name = module.params["name"]
-    tenant_description = module.params["description"]
-
+    tenant_parameters = {
+        "description": module.params["description"],
+    }
     changed_flag = False
     module_result = None
-    existent_tenants = module.opensearch_request(None, "/_plugins/_security/api/tenants", "GET")
+    existent_tenants = module.opensearch_request(None, api_prefix, "GET")
+    existent_tenant = existent_tenants.get(tenant_name, None)
 
     if module.params["state"] == "present":
-        if tenant_name not in existent_tenants:
+        if not existent_tenant:
             module_result = module.opensearch_request(
-                {"description": tenant_description},
-                f"/_plugins/_security/api/tenants/{tenant_name}",
+                tenant_parameters,
+                api_prefix + tenant_name,
                 "PUT",
             )
             changed_flag = True
-        elif tenant_description != existent_tenants[tenant_name].get("description", ""):
-            request_body = [
+        elif params_differ(tenant_parameters, existent_tenant):
+            patch_body = [
                 {
                     "op": "replace",
-                    "path": "/description",
-                    "value": tenant_description,
+                    "path": "/" + tenant_name,
+                    "value": tenant_parameters,
                 }
             ]
             module_result = module.opensearch_request(
-                request_body,
-                f"/_plugins/_security/api/tenants/{tenant_name}",
+                patch_body,
+                api_prefix,
                 "PATCH",
             )
             changed_flag = True
@@ -81,10 +89,8 @@ def main() -> None:
                 "status": "OK",
             }
     elif module.params["state"] == "absent":
-        if tenant_name in existent_tenants:
-            module_result = module.opensearch_request(
-                None, f"/_plugins/_security/api/tenants/{tenant_name}", "DELETE"
-            )
+        if existent_tenant:
+            module_result = module.opensearch_request(None, api_prefix + tenant_name, "DELETE")
             changed_flag = True
         else:
             module_result = {
