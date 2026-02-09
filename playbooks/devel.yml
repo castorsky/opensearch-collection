@@ -2,36 +2,35 @@
   hosts: local_opensearch
   gather_facts: false
   tasks:
-    - name: Test tenant
-      castorsky.opensearch.opensearch_tenant:
-        name: "checker-tenant"
-        description: "Tenant for Checker"
+#    - name: Test tenant
+#      castorsky.opensearch.opensearch_tenant:
+#        name: "checker-tenant"
+#        description: "Tenant for Checker"
+#        state: present
+#      register: checker_tenant
+
+    - name: Test role
+      castorsky.opensearch.opensearch_role:
+        name: "role-checker"
+        description: "Role for Checker1"
+        cluster_permissions:
+          - "cluster_composite_ops"
+          - "indices_monitor"
         state: present
-      register: checker_tenant
+      register: checker_role
 
-#     - name: Test role
-#       castorsky.opensearch.opensearch_role:
-#         name: "role-checker"
-#         description: "Role for Checker"
-#         cluster_permissions:
-#           - "cluster_composite_ops"
-#           - "indices_monitor"
-#         state: absent
-#       register: checker
-
-    - name: Test user
-      castorsky.opensearch.opensearch_user:
-        name: "checker-user"
-        password: "#v3DWeSVDtD2~eqm1"
-        description: "Checker User"
-        opendistro_security_roles:
-          - all_access
-        attributes:
-          shell: "/bin/tcsh"
-          home: "/home/checker"
-        state: present
-      register: checker_user
-
+#    - name: Test user
+#      castorsky.opensearch.opensearch_user:
+#        name: "checker-user"
+#        password: "#v3DWeSVDtD2~eqm1"
+#        description: "Checker User"
+#        opendistro_security_roles:
+#          - all_access
+#        attributes:
+#          shell: "/bin/tcsh"
+#          home: "/home/checker"
+#        state: present
+#      register: checker_user
 
 # #    - name: Save
 # #      ansible.builtin.copy:
@@ -43,5 +42,6 @@
       ansible.builtin.debug:
         var: "{{ item }}"
       loop:
-        - checker_tenant
-        - checker_user
+        - checker_role
+#        - checker_tenant
+#        - checker_user
