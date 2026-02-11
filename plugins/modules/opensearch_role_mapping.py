@@ -39,29 +39,40 @@ EXAMPLES = """
 
 __metaclass__ = type  # pylint: disable=C0103
 
-from ansible_collections.castorsky.opensearch.plugins.module_utils.opensearch import OpenSearchModule
+from ansible_collections.castorsky.opensearch.plugins.module_utils.opensearch import (
+    OpenSearchModule,
+)
 
 
 def main() -> None:
     module_argument_spec = dict(
-        name=dict(type='str', required=True),
-        hosts=dict(type='list', default=[]),
-        users=dict(type='list', default=[]),
-        backend_roles=dict(type='list', default=[]),
-        state=dict(type='str', choices=['present', 'absent'], default='present'),
-        description=dict(type='str', default=''),
+        name=dict(type="str", required=True),
+        hosts=dict(type="list", default=[]),
+        users=dict(type="list", default=[]),
+        backend_roles=dict(type="list", default=[]),
+        state=dict(type="str", choices=["present", "absent"], default="present"),
+        description=dict(type="str", default=""),
     )
 
     module = OpenSearchModule(
         argument_spec=module_argument_spec,
+        supports_check_mode=True,
+        api_prefix="/_plugins/_security/api/rolesmapping/",
     )
 
-    mandatory_params = ['hosts', 'users', 'backend_roles', 'description']
-    module.default_sequence(api_group='security', object_type='role_mapping', object_params=mandatory_params)
+    # Parameters that are used in OpenSearch API request body.
+    rolemap_parameters = {
+        "hosts": module.params["hosts"],
+        "users": module.params["users"],
+        "backend_roles": module.params["backend_roles"],
+        "description": module.params["description"],
+    }
 
-    result = {'changed': module.changed, 'content': module.result}
+    changed_flag, module_result = module.security_crud_sequence(rolemap_parameters)
+
+    result = {"changed": changed_flag, "content": module_result}
     module.exit_json(**result)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
