@@ -41,23 +41,25 @@ __metaclass__ = type  # pylint: disable=C0103
 
 from typing import TYPE_CHECKING
 
-from ansible_collections.castorsky.opensearch.plugins.module_utils.opensearch import OpenSearchModule
+from ansible_collections.castorsky.opensearch.plugins.module_utils.opensearch import (
+    OpenSearchModule,
+)
 
 if TYPE_CHECKING:
     from typing import Callable
 
-def main() -> None:
-    """Entry point for module execution"""
 
+def main() -> None:
     module = OpenSearchModule(argument_spec={}, supports_check_mode=True)
 
-    response = module.opensearch_request(None, '/_cluster/health', 'GET')
+    response = module.opensearch_request(None, "/_cluster/health", "GET")
     health = response
     result = {
         "changed": False,
         "health": health,
     }
     module.exit_json(**result)
+
 
 if __name__ == "__main__":
     main()
