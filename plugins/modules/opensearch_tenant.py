@@ -55,7 +55,7 @@ def main() -> None:
 
     changed_flag, module_result = module.security_crud_sequence(tenant_parameters)
 
-    result = {"changed": changed_flag, "content": module_result}
+    result = {"changed": changed_flag, "message": module_result}
     module.exit_json(**result)
 
 
