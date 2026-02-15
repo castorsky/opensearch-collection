@@ -15,14 +15,11 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 from ansible.module_utils.common.text.converters import to_text
 
 
-USER_SPECIFIC_KEYS = ["password", "password_hash"]
-
-
-def params_differ(local_params: dict[Any, Any], remote_params: dict[Any, Any]) -> bool:
+def params_differ(local_params: dict[Any, Any], remote_params: dict[Any, Any], skip_keys: list[str] = []) -> bool:
     """Returns True if any record from local_params differs from corresponding record from remote_params."""
     for key, value in local_params.items():
-        # Skip user-specific parameters that OpenSearch API does not return.
-        if key in USER_SPECIFIC_KEYS:
+        # Skip some specific parameters that function should not compare.
+        if key in skip_keys:
             continue
         if remote_params.get(key, "") != value:
             return True
@@ -39,7 +36,7 @@ class OpenSearchModule(AnsibleModule):
         self.result = None
 
     def opensearch_request(
-        self, data: dict | list | None, path: str, method: str
+            self, data: dict | list | None, path: str, method: str
     ) -> dict[Any, Any] | None:
         """
         Perform an API request to the OpenSearch cluster.
@@ -50,6 +47,9 @@ class OpenSearchModule(AnsibleModule):
                 path = "/" + path
 
             code, response = self.connection.send_request(data, path, method)
+
+            if code == 404:
+                return None
 
             if code >= 400:
                 self.fail_json(msg=f"HTTP Error occurred: {code} {response}")
@@ -62,7 +62,7 @@ class OpenSearchModule(AnsibleModule):
             self.fail_json(msg=f"Exception caught: {to_text(e)}")
 
     def security_crud_sequence(
-        self, api_object_parameters: dict[str, Any]
+            self, api_object_parameters: dict[str, Any]
     ) -> Tuple[bool, dict[str, Any]]:
         """
         Performs create/update/delete sequence for the Security API objects.
@@ -78,6 +78,9 @@ class OpenSearchModule(AnsibleModule):
         """
         obj_name = self.params["name"]
 
+        # Skip these keys when comparing parameters.
+        user_specific_keys = ["password", "password_hash"]
+
         changed_flag = False
         module_result = None
         force_update = self.params.get("force", False)
@@ -91,7 +94,7 @@ class OpenSearchModule(AnsibleModule):
                     )
                 module_result = {"message": f"'{obj_name}' was created.", "status": "CREATED"}
                 changed_flag = True
-            elif force_update or params_differ(api_object_parameters, existent_object):
+            elif force_update or params_differ(api_object_parameters, existent_object, user_specific_keys):
                 patch_body = [
                     {
                         "op": "replace",

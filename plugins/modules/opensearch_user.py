@@ -85,6 +85,8 @@ def main() -> None:
         api_prefix="/_plugins/_security/api/internalusers/",
     )
 
+    keys_to_skip = ["password", "password_hash"]
+
     # Parameters that are used in OpenSearch API request body.
     user_parameters = {
         "opendistro_security_roles": module.params["opendistro_security_roles"],
