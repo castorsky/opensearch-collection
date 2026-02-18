@@ -5,9 +5,11 @@
     - name: Test index
       castorsky.opensearch.opensearch_index:
         name: "checker-index"
+        force: true
         settings:
-#          number_of_shards: 2
-          number_of_replicas: 0
+          number_of_shards: 3
+          codec: "zstd"
+          number_of_replicas: 1
         state: present
       register: checker_index
 

@@ -9,19 +9,80 @@ from __future__ import absolute_import, annotations, division, print_function
 
 __metaclass__ = type  # pylint: disable=C0103
 
+import re
+
 from ansible.module_utils.connection import Connection
 from ansible.module_utils.basic import AnsibleModule, env_fallback, missing_required_lib  # type: ignore
 from typing import Any, Dict, List, Optional, Tuple, Union
 from ansible.module_utils.common.text.converters import to_text
 
 
-def params_differ(local_params: dict[Any, Any], remote_params: dict[Any, Any], skip_keys: list[str] = []) -> bool:
-    """Returns True if any record from local_params differs from corresponding record from remote_params."""
+def flatten_dict(nested_dict, parent_key=''):
+    """
+    Flatten a nested dictionary structure into a one-level dictionary with dot-separated keys.
+    Used to workaround OpenSearch API response structure: a key can contain both primitive value
+    and nested object mutually (for example, "codec": "zstd_no_dict" and "codec.qatmode": "auto").
+
+    Args:
+        nested_dict (dict): The nested dictionary to flatten
+        parent_key (str): The parent key for current level (used in recursion)
+
+    Returns:
+        dict: Flattened dictionary with dot-separated key paths
+    """
+    items = []
+
+    for key, value in nested_dict.items():
+        new_key = f"{parent_key}.{key}" if parent_key else key
+
+        if isinstance(value, dict):
+            # Recursively flatten nested dictionaries
+            items.extend(flatten_dict(value, new_key).items())
+        else:
+            # Add the key-value pair to items
+            items.append((new_key, value))
+
+    return dict(items)
+
+
+def params_differ(local_params: dict[str, Any], remote_params: dict[str, Any], skip_keys: list[str] = []) -> bool:
+    """
+    Compare two dictionaries by keys from the first (local) dictionary. If any key from the first dictionary
+    has different value in the second dictionary (or if this key is absent in the second dictionary), return True.
+
+    Args:
+        local_params: Flat dictionary with parameters from the module config.
+        remote_params: Flat dictionary with parameters from the OpenSearch cluster.
+        skip_keys: List of keys to skip when comparing parameters.
+
+    Returns:
+        bool: False if all parameters from the module config have corresponding parameters in the OpenSearch cluster.
+    """
+
+    def parse_opensearch_numeric(value: str) -> int | float:
+        """Parse an OpenSearch numeric string into a Python int or float."""
+        if value.endswith("b"):
+            return int(value[:-1])  # byte value → int
+        try:
+            return int(value)  # plain integer
+        except ValueError:
+            return float(value)  # decimal float
+
     for key, value in local_params.items():
         # Skip some specific parameters that function should not compare.
         if key in skip_keys:
             continue
-        if remote_params.get(key, "") != value:
+
+        # Skip when local value is None and remote key is not present.
+        # This means that this parameter was already reset in the cluster.
+        if value is None and key not in remote_params.keys():
+            continue
+
+        remote_value = remote_params.get(key, "")
+        if re.fullmatch(r"-?\d+(\.\d+)?b?", remote_value):
+            remote_value = parse_opensearch_numeric(remote_value)
+
+        if remote_value != value:
             return True
     return False
 
