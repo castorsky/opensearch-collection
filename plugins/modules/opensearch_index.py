@@ -74,12 +74,28 @@ from ansible_collections.castorsky.opensearch.plugins.module_utils.opensearch im
 UNBREAKABLE_SETTINGS = ["number_of_shards"]
 
 # Settings that can be updated only on a closed index.
-STATIC_SETTINGS = ["number_of_routing_shards", "shard.check_on_startup", "codec", "codec.compression_level",
-                   "codec.qatmode", "routing_partition_size", "soft_deletes.retention_lease.period", "sort.field",
-                   "sort.order", "sort.mode", "sort.missing", "load_fixed_bitset_filters_eagerly", "hidden",
-                   "merge.policy", "merge_on_flush.enabled", "merge_on_flush.max_full_flush_merge_wait_time",
-                   "check_pending_flush.enabled", "use_compound_file", "append_only.enabled",
-                   "derived_source.enabled"]
+STATIC_SETTINGS = [
+    "number_of_routing_shards",
+    "shard.check_on_startup",
+    "codec",
+    "codec.compression_level",
+    "codec.qatmode",
+    "routing_partition_size",
+    "soft_deletes.retention_lease.period",
+    "sort.field",
+    "sort.order",
+    "sort.mode",
+    "sort.missing",
+    "load_fixed_bitset_filters_eagerly",
+    "hidden",
+    "merge.policy",
+    "merge_on_flush.enabled",
+    "merge_on_flush.max_full_flush_merge_wait_time",
+    "check_pending_flush.enabled",
+    "use_compound_file",
+    "append_only.enabled",
+    "derived_source.enabled",
+]
 
 from typing import TYPE_CHECKING
 
@@ -96,10 +112,10 @@ def index_name_is_valid(name: str) -> bool:
     - Cannot begin with underscores (_) or hyphens (-)
     - Cannot contain spaces, commas, or the following characters: :, ", *, +, /, \\, |, ?, #, >, or <
     """
-    if name.startswith('_') or name.startswith('-'):
+    if name.startswith("_") or name.startswith("-"):
         return False
 
-    forbidden_chars = [' ', ',', ':', '"', '*', '+', '/', '\\', '|', '?', '#', '>', '<']
+    forbidden_chars = [" ", ",", ":", '"', "*", "+", "/", "\\", "|", "?", "#", ">", "<"]
     for char in forbidden_chars:
         if char in name:
             return False
@@ -145,9 +161,7 @@ def main() -> None:
                     "mappings": module.params["mappings"],
                     "aliases": module.params["aliases"],
                 }
-                module.opensearch_request(
-                    request_parameters, module.api_prefix + index_name, "PUT"
-                )
+                module.opensearch_request(request_parameters, module.api_prefix + index_name, "PUT")
             module_result = {"message": f"'{index_name}' was created.", "status": "CREATED"}
             changed_flag = True
         else:
@@ -158,8 +172,12 @@ def main() -> None:
             for key in UNBREAKABLE_SETTINGS:
                 index_settings.pop(key, None)
 
-            static_settings = {key: value for key, value in index_settings.items() if key in STATIC_SETTINGS}
-            dynamic_settings = {key: value for key, value in index_settings.items() if key not in STATIC_SETTINGS}
+            static_settings = {
+                key: value for key, value in index_settings.items() if key in STATIC_SETTINGS
+            }
+            dynamic_settings = {
+                key: value for key, value in index_settings.items() if key not in STATIC_SETTINGS
+            }
 
             static_changed = params_differ(static_settings, existing_index_settings)
             dynamic_changed = params_differ(dynamic_settings, existing_index_settings)
@@ -168,9 +186,15 @@ def main() -> None:
             if static_changed and module.params["force"]:
                 # Close index, apply changes and open index back.
                 if not module.check_mode:
-                    module.opensearch_request(None, module.api_prefix + index_name + "/_close", "POST")
-                    module.opensearch_request(index_settings, module.api_prefix + index_name + "/_settings", "PUT")
-                    module.opensearch_request(None, module.api_prefix + index_name + "/_open", "POST")
+                    module.opensearch_request(
+                        None, module.api_prefix + index_name + "/_close", "POST"
+                    )
+                    module.opensearch_request(
+                        index_settings, module.api_prefix + index_name + "/_settings", "PUT"
+                    )
+                    module.opensearch_request(
+                        None, module.api_prefix + index_name + "/_open", "POST"
+                    )
                 changed_flag = True
                 if dynamic_changed:
                     result_messages.append("dynamic settings updated")
@@ -184,7 +208,9 @@ def main() -> None:
             elif dynamic_changed:
                 request_parameters = {"index": dynamic_settings}
                 if not module.check_mode:
-                    module.opensearch_request(request_parameters, module.api_prefix + index_name + "/_settings", "PUT")
+                    module.opensearch_request(
+                        request_parameters, module.api_prefix + index_name + "/_settings", "PUT"
+                    )
                 changed_flag = True
                 if static_changed:
                     result_messages.append("static settings skipped")
@@ -201,8 +227,10 @@ def main() -> None:
             if not changed_flag:
                 module_result = {"message": f"'{index_name}' is up to date.", "status": "OK"}
             else:
-                module_result = {"message": f"'{index_name}' was updated: {', '.join(result_messages)}.",
-                                 "status": "UPDATED"}
+                module_result = {
+                    "message": f"'{index_name}' was updated: {', '.join(result_messages)}.",
+                    "status": "UPDATED",
+                }
 
             # if params_differ(module.params["aliases"], existent_index["aliases"]):
             #     request_body = module.params["mappings"]
