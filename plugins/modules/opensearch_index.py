@@ -67,8 +67,9 @@ from ansible_collections.castorsky.opensearch.plugins.module_utils.opensearch im
     flatten_dict,
 )
 
-# import pydevd_pycharm
-# pydevd_pycharm.settrace('localhost', port=12877, stdout_to_server=True, stderr_to_server=True)
+import pydevd_pycharm
+
+pydevd_pycharm.settrace("localhost", port=43555, stdout_to_server=True, stderr_to_server=True)
 
 # Settings that cannot be updated after index was created.
 UNBREAKABLE_SETTINGS = ["number_of_shards"]
@@ -126,6 +127,74 @@ def index_name_is_valid(name: str) -> bool:
     return True
 
 
+def update_index_settings(module: OpenSearchModule, existing_index: dict) -> tuple[bool, list[str]]:
+    """
+    Find out which settings need to be updated. Apply changes if needed.
+    Args:
+        module: OpenSearch(Ansible) module used to get wanted config and perform requests to cluster.
+        existing_index: Existing index information as returned by OpenSearch API.
+
+    Returns:
+        tuple of:
+            - bool: True if any settings were changed, False otherwise
+            - list[str]: List of messages describing what settings were updated
+    """
+    settings_changed = False
+    settings_messages = []
+    name = module.params["name"]
+
+    wanted_settings = flatten_dict(module.params["settings"])
+    existing_settings = flatten_dict(existing_index[name]["settings"]["index"])
+
+    # Remove params that API cannot update.
+    for key in UNBREAKABLE_SETTINGS:
+        wanted_settings.pop(key, None)
+
+    # Split settings into static and dynamic categories based on whether they can be modified without closing index.
+    static_settings = {
+        key: value for key, value in wanted_settings.items() if key in STATIC_SETTINGS
+    }
+    dynamic_settings = {
+        key: value for key, value in wanted_settings.items() if key not in STATIC_SETTINGS
+    }
+
+    static_changed = params_differ(static_settings, existing_settings)
+    dynamic_changed = params_differ(dynamic_settings, existing_settings)
+
+    if static_changed and module.params["force"]:
+        # Make changes both to static and dynamic parameters if "force" was set.
+        if not module.check_mode:
+            # Close index, apply changes and open index back.
+            module.opensearch_request(None, module.api_prefix + name + "/_close", "POST")
+            module.opensearch_request(
+                wanted_settings, module.api_prefix + name + "/_settings", "PUT"
+            )
+            module.opensearch_request(None, module.api_prefix + name + "/_open", "POST")
+        settings_changed = True
+        if dynamic_changed:
+            settings_messages.append("dynamic settings updated")
+        settings_messages.append("static settings force-updated")
+
+    elif static_changed and not dynamic_changed:
+        # Static settings cannot be updated without force, so skip the update.
+        settings_messages.append("static settings update skipped")
+
+    elif dynamic_changed:
+        # Ignore changes to static parameters even they are present because "force" was not set.
+        # Update only parameters that can be changed dynamically.
+        request_parameters = {"index": dynamic_settings}
+        if not module.check_mode:
+            module.opensearch_request(
+                request_parameters, module.api_prefix + name + "/_settings", "PUT"
+            )
+        settings_changed = True
+        if static_changed:
+            settings_messages.append("static settings skipped")
+        settings_messages.append("dynamic settings updated")
+
+    return settings_changed, settings_messages
+
+
 def main() -> None:
     module_argument_spec = dict(
         name=dict(type="str", required=True),
@@ -146,8 +215,6 @@ def main() -> None:
     if not index_name_is_valid(index_name):
         module.fail_json(msg=f"Failed to validate index name: {index_name}")
 
-    index_settings = flatten_dict(module.params["settings"])
-
     changed_flag = False
     module_result = None
 
@@ -166,55 +233,10 @@ def main() -> None:
             changed_flag = True
         else:
             result_messages = []
-            existing_index_settings = flatten_dict(existent_index[index_name]["settings"]["index"])
 
-            # Remove params that API cannot update.
-            for key in UNBREAKABLE_SETTINGS:
-                index_settings.pop(key, None)
-
-            static_settings = {
-                key: value for key, value in index_settings.items() if key in STATIC_SETTINGS
-            }
-            dynamic_settings = {
-                key: value for key, value in index_settings.items() if key not in STATIC_SETTINGS
-            }
-
-            static_changed = params_differ(static_settings, existing_index_settings)
-            dynamic_changed = params_differ(dynamic_settings, existing_index_settings)
-
-            # Make changes both to static and dynamic parameters if "force" was set.
-            if static_changed and module.params["force"]:
-                # Close index, apply changes and open index back.
-                if not module.check_mode:
-                    module.opensearch_request(
-                        None, module.api_prefix + index_name + "/_close", "POST"
-                    )
-                    module.opensearch_request(
-                        index_settings, module.api_prefix + index_name + "/_settings", "PUT"
-                    )
-                    module.opensearch_request(
-                        None, module.api_prefix + index_name + "/_open", "POST"
-                    )
-                changed_flag = True
-                if dynamic_changed:
-                    result_messages.append("dynamic settings updated")
-                result_messages.append("static settings force-updated")
-
-            elif static_changed and not dynamic_changed:
-                result_messages.append("settings update skipped")
-
-            # Ignore changes to static parameters even they are present because "force" was not set.
-            # Update only parameters that can be changed dynamically.
-            elif dynamic_changed:
-                request_parameters = {"index": dynamic_settings}
-                if not module.check_mode:
-                    module.opensearch_request(
-                        request_parameters, module.api_prefix + index_name + "/_settings", "PUT"
-                    )
-                changed_flag = True
-                if static_changed:
-                    result_messages.append("static settings skipped")
-                result_messages.append("dynamic settings updated")
+            settings_chgd, settings_msgs = update_index_settings(module, existent_index)
+            changed_flag = changed_flag or settings_chgd
+            result_messages.extend(settings_msgs)
 
             # existing_mappings = existent_index[index_name]["mappings"]
             # if params_differ(module.params["mappings"], existing_mappings):
@@ -225,7 +247,9 @@ def main() -> None:
             #     module_result = {"message": f"'{index_name}' was updated.", "status": "UPDATED"}
 
             if not changed_flag:
-                module_result = {"message": f"'{index_name}' is up to date.", "status": "OK"}
+                msgs = ["is up to date"]
+                msgs.extend(result_messages)
+                module_result = {"message": f"'{index_name}' {', '.join(msgs)}.", "status": "OK"}
             else:
                 module_result = {
                     "message": f"'{index_name}' was updated: {', '.join(result_messages)}.",
