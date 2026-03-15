@@ -10,6 +10,7 @@ from __future__ import absolute_import, annotations, division, print_function
 __metaclass__ = type  # pylint: disable=C0103
 
 import re
+from json import dumps as json_dumps
 
 from ansible.module_utils.connection import Connection
 from ansible.module_utils.basic import AnsibleModule, env_fallback, missing_required_lib  # type: ignore
@@ -45,44 +46,59 @@ def flatten_dict(nested_dict, parent_key=''):
     return dict(items)
 
 
-def params_differ(local_params: dict[str, Any], remote_params: dict[str, Any], skip_keys: list[str] = []) -> bool:
+def _parse_opensearch_numeric(value: str) -> int | float:
+    """ Parse a numeric string into a Python int or float. """
+    try:
+        return int(value)  # plain integer
+    except ValueError:
+        return float(value)  # decimal float
+
+
+def params_differ(left: dict[str, Any], right: dict[str, Any], skip_keys: list[str] = []) -> bool:
     """
-    Compare two dictionaries by keys from the first (local) dictionary. If any key from the first dictionary
-    has different value in the second dictionary (or if this key is absent in the second dictionary), return True.
+    Compare two dictionaries by keys from the left (local) dictionary. If any key from the left dictionary
+    has different value in the right dictionary (or if this key is absent in the right dictionary), return True.
 
     Args:
-        local_params: Flat dictionary with parameters from the module config.
-        remote_params: Flat dictionary with parameters from the OpenSearch cluster.
+        left: Dictionary with parameters from the module config (wanted parameters).
+        right: Dictionary with parameters from the OpenSearch cluster (existing parameters).
         skip_keys: List of keys to skip when comparing parameters.
 
     Returns:
         bool: False if all parameters from the module config have corresponding parameters in the OpenSearch cluster.
     """
 
-    def parse_opensearch_numeric(value: str) -> int | float:
-        """Parse an OpenSearch numeric string into a Python int or float."""
-        if value.endswith("b"):
-            return int(value[:-1])  # byte value → int
-        try:
-            return int(value)  # plain integer
-        except ValueError:
-            return float(value)  # decimal float
+    def normalize(value: Any) -> Any:
+        """
+        Normalize value using JSON-serialization to achieve stable order of elements
+        in nested dicts and lists suitable for comparison.
+        Numeric values from strings are parsed into Python int or float.
+        """
+        if isinstance(value, dict):
+            return {k: normalize(v) for k, v in sorted(value.items())}
 
-    for key, value in local_params.items():
+        if isinstance(value, list):
+            normalized_items = [normalize(v) for v in value]
+            return sorted(normalized_items, key=lambda x: json_dumps(x, sort_keys=True))
+
+        if isinstance(value, str) and re.fullmatch(r"-?\d+(\.\d+)?", value):
+            value = _parse_opensearch_numeric(value)
+
+        return value
+
+    for key, left_value in left.items():
         # Skip some specific parameters that function should not compare.
         if key in skip_keys:
             continue
 
         # Skip when local value is None and remote key is not present.
         # This means that this parameter was already reset in the cluster.
-        if value is None and key not in remote_params.keys():
+        if left_value is None and key not in right.keys():
             continue
 
-        remote_value = remote_params.get(key, "")
-        if re.fullmatch(r"-?\d+(\.\d+)?b?", remote_value):
-            remote_value = parse_opensearch_numeric(remote_value)
+        right_value = right.get(key, "")
 
-        if remote_value != value:
+        if normalize(left_value) != normalize(right_value):
             return True
     return False
 
