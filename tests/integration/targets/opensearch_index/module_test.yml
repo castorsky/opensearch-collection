@@ -6,94 +6,233 @@
 - name: Module test
   hosts: testgroup
   gather_facts: false
+  vars:
+    index_name: "integration-testing-index"
+    settings_basic:
+      number_of_shards: 1
+      codec: "zstd"
+      number_of_replicas: 1
+    settings_diverged_static:
+      number_of_shards: 2
+      codec: "best_compression"
+    settings_diverged_dynamic:
+      number_of_replicas: 2
+      routing: {allocation: {require: {temp: hot}}}
+    mappings_basic:
+      dynamic_templates:
+        - strings: {mapping: {ignore_above: 1024, type: keyword}, match_mapping_type: string}
+      properties:
+        remote_addr: {type: ip, ignore_malformed: true}
+    mappings_diverged:
+      dynamic_templates:
+        - integers: {mapping: {type: long, ignore_malformed: true}, match_mapping_type: long}
+    aliases_basic:
+      alias1:
+        filter: {term: {customer_id: 123}}
+    aliases_diverged:
+      alias2:
+        index_routing: west
+        search_routing: west
+
   tasks:
-#    - name: Create a simple OpenSearch index
-#      register: result
-#      castorsky.opensearch.opensearch_index:
-#        name: "checker-index"
-#        force: true
-#        settings:
-#          number_of_shards: 3
-#          codec: "zstd"
-#          number_of_replicas: 3
-#        mappings:
-#          dynamic_templates:
-#            - strings:
-#                mapping:
-#                  ignore_above: 1024
-#                  type: keyword
-#                match_mapping_type: string
-#            - integers:
-#                mapping:
-#                  type: long
-#                  ignore_malformed: true
-#                match_mapping_type: long
-#        state: present
-#
-#    - debug:
-#        var: result
-#
-#    - name: Alternate order of items in dynamic templates
-#      register: result
-#      castorsky.opensearch.opensearch_index:
-#        name: "checker-index"
-#        force: true
-#        settings:
-#          number_of_shards: 3
-#          codec: "zstd"
-#          number_of_replicas: 3
-#        mappings:
-#          dynamic_templates:
-#            - integers:
-#                mapping:
-#                  type: long
-#                  ignore_malformed: true
-#                match_mapping_type: long
-#            - strings:
-#                mapping:
-#                  ignore_above: 1024
-#                  type: keyword
-#                match_mapping_type: string
-#        state: present
-#
-#    - debug:
-#        var: result
-
-#    - name: Assert that the index was created successfully
-#      ansible.builtin.assert:
-#        that:
-#          - result.changed == true
-#          - result.message.status == "CREATED"
-#          - "'test-ansible-index' in result.message.message"
-
-    - name: Add some properties to mappings
+    - name: Ensure that index is missing from cluster
       register: result
       castorsky.opensearch.opensearch_index:
-        name: "checker-index"
-        force: true
-        settings:
-          number_of_shards: 3
-          codec: "zstd"
-          number_of_replicas: 3
-        mappings:
-          dynamic_templates:
-            - integers:
-                mapping:
-                  type: long
-                  ignore_malformed: true
-                match_mapping_type: long
-            - strings:
-                mapping:
-                  ignore_above: 1024
-                  type: keyword
-                match_mapping_type: string
-            - integers:
-                mapping:
-                  type: long
-                  ignore_malformed: true
-                match_mapping_type: long
+        name: "{{ index_name }}"
+        state: absent
+
+    - name: Assert that the module performed action successfully
+      ansible.builtin.assert:
+        that:
+          - result.failed == false
+          - index_name in result.message.message
+
+
+    - name: Create a simple OpenSearch index
+      register: result
+      castorsky.opensearch.opensearch_index:
+        name: "{{ index_name }}"
+        settings: "{{ settings_basic }}"
         state: present
 
-    - debug:
-        var: result
+    - name: Assert that the module performed action successfully
+      ansible.builtin.assert:
+        that:
+          - result.changed == true
+          - result.failed == false
+          - result.message.status == "CREATED"
+          - "'was created' in result.message.message"
 
+    - name: Change static settings without force=true
+      register: result
+      castorsky.opensearch.opensearch_index:
+        name: "{{ index_name }}"
+        settings: "{{ settings_diverged_static }}"
+        state: present
+
+    - name: Assert that the module performed action successfully
+      ansible.builtin.assert:
+        that:
+          - result.changed == false
+          - result.failed == false
+          - result.message.status == "OK"
+          - "'static settings update skipped' in result.message.message"
+
+    - name: Change static settings with force=true
+      register: result
+      castorsky.opensearch.opensearch_index:
+        name: "{{ index_name }}"
+        force: true
+        settings: "{{ settings_diverged_static }}"
+        state: present
+
+    - name: Assert that the module performed action successfully
+      ansible.builtin.assert:
+        that:
+          - result.changed == true
+          - result.failed == false
+          - result.message.status == "UPDATED"
+          - "'static settings force-updated' in result.message.message"
+
+    - name: Change dynamic settings without force=true
+      register: result
+      castorsky.opensearch.opensearch_index:
+        name: "{{ index_name }}"
+        settings: "{{ settings_diverged_dynamic }}"
+        state: present
+
+    - name: Assert that the module performed action successfully
+      ansible.builtin.assert:
+        that:
+          - result.changed == true
+          - result.failed == false
+          - result.message.status == "UPDATED"
+          - "'dynamic settings updated' in result.message.message"
+
+    - name: Change both static and dynamic settings with force=true
+      register: result
+      castorsky.opensearch.opensearch_index:
+        name: "{{ index_name }}"
+        force: true
+        settings: "{{ settings_basic }}"
+        state: present
+
+    - name: Assert that the module performed action successfully
+      ansible.builtin.assert:
+        that:
+          - result.changed == true
+          - result.failed == false
+          - result.message.status == "UPDATED"
+          - "'dynamic settings updated' in result.message.message"
+          - "'static settings force-updated' in result.message.message"
+
+
+    - name: Add basic mappings to the index
+      register: result
+      castorsky.opensearch.opensearch_index:
+        name: "{{ index_name }}"
+        mappings: "{{ mappings_basic }}"
+        state: present
+
+    - name: Assert that the module performed action successfully
+      ansible.builtin.assert:
+        that:
+          - result.changed == true
+          - result.failed == false
+          - result.message.status == "UPDATED"
+          - "'mappings updated' in result.message.message"
+
+    - name: Change mappings in the index
+      register: result
+      castorsky.opensearch.opensearch_index:
+        name: "{{ index_name }}"
+        mappings: "{{ mappings_diverged }}"
+        state: present
+
+    - name: Assert that the module performed action successfully
+      ansible.builtin.assert:
+        that:
+          - result.changed == true
+          - result.failed == false
+          - result.message.status == "UPDATED"
+          - "'mappings updated' in result.message.message"
+
+
+    - name: Add an alias to the index
+      register: result
+      castorsky.opensearch.opensearch_index:
+        name: "{{ index_name }}"
+        aliases: "{{ aliases_basic }}"
+        state: present
+
+    - name: Assert that the module performed action successfully
+      ansible.builtin.assert:
+        that:
+          - result.changed == true
+          - result.failed == false
+          - result.message.status == "UPDATED"
+          - "'aliases updated' in result.message.message"
+
+    - name: Remove old and add new alias to the index
+      register: result
+      castorsky.opensearch.opensearch_index:
+        name: "{{ index_name }}"
+        aliases: "{{ aliases_diverged }}"
+        state: present
+
+    - name: Assert that the module performed action successfully
+      ansible.builtin.assert:
+        that:
+          - result.changed == true
+          - result.failed == false
+          - result.message.status == "UPDATED"
+          - "'aliases updated' in result.message.message"
+          - "'aliases removed' in result.message.message"
+
+    - name: Set empty aliases dict
+      register: result
+      castorsky.opensearch.opensearch_index:
+        name: "{{ index_name }}"
+        aliases: {}
+        state: present
+
+    - name: Assert that the module performed action successfully
+      ansible.builtin.assert:
+        that:
+          - result.changed == false
+          - result.failed == false
+          - result.message.status == "OK"
+          - "'is up to date' in result.message.message"
+
+    - name: Forcibly remove all aliases from the index
+      register: result
+      castorsky.opensearch.opensearch_index:
+        name: "{{ index_name }}"
+        force: true
+        aliases: {}
+        state: present
+
+    - name: Assert that the module performed action successfully
+      ansible.builtin.assert:
+        that:
+          - result.changed == true
+          - result.failed == false
+          - result.message.status == "UPDATED"
+          - "'aliases updated' not in result.message.message"
+          - "'aliases removed' in result.message.message"
+
+
+    - name: Remove the index from the cluster
+      register: result
+      castorsky.opensearch.opensearch_index:
+        name: "{{ index_name }}"
+        state: absent
+
+    - name: Assert that the module performed action successfully
+      ansible.builtin.assert:
+        that:
+          - result.changed == true
+          - result.failed == false
+          - result.message.status == "DELETED"
+          - index_name in result.message.message
+          - "'was deleted' in result.message.message"

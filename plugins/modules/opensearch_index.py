@@ -29,6 +29,7 @@ DOCUMENTATION = """
           - Parameter V(number_of_shards) cannot be updated after index was created and ignored even if O(force=true).
           - Static settings will not be updated and silently ignored if O(force=false).
           - Dynamic settings can be updated without closing the index and do not require O(force=true).
+          - Removal of setting from cluster is performed when its value is specified asV(null).
         type: dict
         default: {}
       mappings:
@@ -55,7 +56,7 @@ DOCUMENTATION = """
         description:
           - Force update of the index settings that can be changed only on a closed index.
             Index will be closed and opened back only if needed (static settings were changed).
-          - Force deletion of aliases when O(aliases) is skipped and cluster index has some aliases.
+          - Force deletion of aliases when O(aliases) is skipped or O(aliases={}) and cluster index has some aliases.
         type: bool
         default: false
 """
