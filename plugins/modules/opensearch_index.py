@@ -31,6 +31,16 @@ DOCUMENTATION = """
           - Dynamic settings can be updated without closing the index and do not require O(force=true).
         type: dict
         default: {}
+      mappings:
+        description:
+          - Object with index mappings to be applied.
+          - Mappings can be added or updated, not deleted.
+          - Module at the time does not perform verification of unsupported operations (such as
+            changing the type of a property, which can't be modified after the mapping was applied,
+            or adding incompatible property parameter).
+          - Operation of removing a property will be silently skipped by OpenSearch API.
+        type: dict
+        default: {}
       force:
         description:
           - Force update of the index settings that can be changed only on a closed index.
@@ -67,9 +77,7 @@ from ansible_collections.castorsky.opensearch.plugins.module_utils.opensearch im
     flatten_dict,
 )
 
-import pydevd_pycharm
-
-pydevd_pycharm.settrace("localhost", port=43555, stdout_to_server=True, stderr_to_server=True)
+# import pydevd_pycharm; pydevd_pycharm.settrace("localhost", port=43555, stdout_to_server=True, stderr_to_server=True)
 
 # Settings that cannot be updated after index was created.
 UNBREAKABLE_SETTINGS = ["number_of_shards"]
@@ -139,8 +147,8 @@ def update_index_settings(module: OpenSearchModule, existing_index: dict) -> tup
             - bool: True if any settings were changed, False otherwise.
             - list[str]: List of messages describing what settings were updated.
     """
-    settings_changed = False
-    settings_messages = []
+    settings_changed_flag = False
+    settings_messages_list = []
     name = module.params["name"]
 
     wanted_settings = flatten_dict(module.params["settings"])
@@ -170,14 +178,14 @@ def update_index_settings(module: OpenSearchModule, existing_index: dict) -> tup
                 wanted_settings, module.api_prefix + name + "/_settings", "PUT"
             )
             module.opensearch_request(None, module.api_prefix + name + "/_open", "POST")
-        settings_changed = True
+        settings_changed_flag = True
         if dynamic_changed:
-            settings_messages.append("dynamic settings updated")
-        settings_messages.append("static settings force-updated")
+            settings_messages_list.append("dynamic settings updated")
+        settings_messages_list.append("static settings force-updated")
 
     elif static_changed and not dynamic_changed:
         # Static settings cannot be updated without force, so skip the update.
-        settings_messages.append("static settings update skipped")
+        settings_messages_list.append("static settings update skipped")
 
     elif dynamic_changed:
         # Ignore changes to static parameters even they are present because "force" was not set.
@@ -187,12 +195,12 @@ def update_index_settings(module: OpenSearchModule, existing_index: dict) -> tup
             module.opensearch_request(
                 request_parameters, module.api_prefix + name + "/_settings", "PUT"
             )
-        settings_changed = True
+        settings_changed_flag = True
         if static_changed:
-            settings_messages.append("static settings skipped")
-        settings_messages.append("dynamic settings updated")
+            settings_messages_list.append("static settings skipped")
+        settings_messages_list.append("dynamic settings updated")
 
-    return settings_changed, settings_messages
+    return settings_changed_flag, settings_messages_list
 
 
 def update_index_mappings(module: OpenSearchModule, existing_index: dict) -> tuple[bool, list[str]]:
@@ -207,22 +215,23 @@ def update_index_mappings(module: OpenSearchModule, existing_index: dict) -> tup
             - bool: True if any mappings were changed, False otherwise.
             - list[str]: List of messages indicating what was changed.
     """
-    mappings_messages = []
+    mappings_messages_list = []
     name = module.params["name"]
 
     wanted_mappings = module.params["mappings"]
     existing_mappings = existing_index[name]["mappings"]
 
-    mappings_changed = params_differ(wanted_mappings, existing_mappings)
+    mappings_changed_flag = params_differ(wanted_mappings, existing_mappings)
 
-    if mappings_changed:
+    if mappings_changed_flag:
         if not module.check_mode:
             module.opensearch_request(
                 wanted_mappings, module.api_prefix + name + "/_mapping", "PUT"
             )
-        mappings_messages.append("mappings updated")
+        mappings_messages_list.append("mappings updated")
 
-    return mappings_changed, mappings_messages
+    return mappings_changed_flag, mappings_messages_list
+
 
 def main() -> None:
     module_argument_spec = dict(
@@ -263,13 +272,13 @@ def main() -> None:
         else:
             result_messages = []
 
-            settings_chgd, settings_msgs = update_index_settings(module, existent_index)
-            changed_flag = changed_flag or settings_chgd
-            result_messages.extend(settings_msgs)
+            settings_changed, settings_messages = update_index_settings(module, existent_index)
+            changed_flag = changed_flag or settings_changed
+            result_messages.extend(settings_messages)
 
-            mappings_chgd, mappings_msgs = update_index_mappings(module, existent_index)
-            changed_flag = changed_flag or mappings_chgd
-            result_messages.extend(mappings_msgs)
+            mappings_changed, mappings_messages = update_index_mappings(module, existent_index)
+            changed_flag = changed_flag or mappings_changed
+            result_messages.extend(mappings_messages)
 
             # existing_mappings = existent_index[index_name]["mappings"]
             # if params_differ(module.params["mappings"], existing_mappings):

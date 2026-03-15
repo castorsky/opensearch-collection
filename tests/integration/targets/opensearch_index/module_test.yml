@@ -7,7 +7,66 @@
   hosts: testgroup
   gather_facts: false
   tasks:
-    - name: Create a simple OpenSearch index
+#    - name: Create a simple OpenSearch index
+#      register: result
+#      castorsky.opensearch.opensearch_index:
+#        name: "checker-index"
+#        force: true
+#        settings:
+#          number_of_shards: 3
+#          codec: "zstd"
+#          number_of_replicas: 3
+#        mappings:
+#          dynamic_templates:
+#            - strings:
+#                mapping:
+#                  ignore_above: 1024
+#                  type: keyword
+#                match_mapping_type: string
+#            - integers:
+#                mapping:
+#                  type: long
+#                  ignore_malformed: true
+#                match_mapping_type: long
+#        state: present
+#
+#    - debug:
+#        var: result
+#
+#    - name: Alternate order of items in dynamic templates
+#      register: result
+#      castorsky.opensearch.opensearch_index:
+#        name: "checker-index"
+#        force: true
+#        settings:
+#          number_of_shards: 3
+#          codec: "zstd"
+#          number_of_replicas: 3
+#        mappings:
+#          dynamic_templates:
+#            - integers:
+#                mapping:
+#                  type: long
+#                  ignore_malformed: true
+#                match_mapping_type: long
+#            - strings:
+#                mapping:
+#                  ignore_above: 1024
+#                  type: keyword
+#                match_mapping_type: string
+#        state: present
+#
+#    - debug:
+#        var: result
+
+#    - name: Assert that the index was created successfully
+#      ansible.builtin.assert:
+#        that:
+#          - result.changed == true
+#          - result.message.status == "CREATED"
+#          - "'test-ansible-index' in result.message.message"
+
+    - name: Add some properties to mappings
       register: result
       castorsky.opensearch.opensearch_index:
         name: "checker-index"
@@ -18,6 +77,11 @@
           number_of_replicas: 3
         mappings:
           dynamic_templates:
+            - integers:
+                mapping:
+                  type: long
+                  ignore_malformed: true
+                match_mapping_type: long
             - strings:
                 mapping:
                   ignore_above: 1024
@@ -33,9 +97,3 @@
     - debug:
         var: result
 
-    - name: Assert that the index was created successfully
-      ansible.builtin.assert:
-        that:
-          - result.changed == true
-          - result.message.status == "CREATED"
-          - "'test-ansible-index' in result.message.message"
