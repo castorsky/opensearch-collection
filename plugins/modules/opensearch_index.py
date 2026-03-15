@@ -22,7 +22,7 @@ DOCUMENTATION = """
       settings:
         description:
           - Object with index settings to be applied.
-          - Settings can be specified in a flat (V({"codec.qatmode": true})) or nested (V({"codec": {"qatmode": true}})) format.
+          - Settings can be specified in a flat (V({"codec.qatmode"= true})) or nested (V({"codec"= {"qatmode"= true}})) format.
           - Settings that are considered "static" (
             L(Static Index Settings,https://docs.opensearch.org/latest/install-and-configure/configuring-opensearch/index-settings/#static-index-level-index-settings)
             ) can be updated only when O(force=true) is specified. In this case index will be closed and opened back.
@@ -34,17 +34,28 @@ DOCUMENTATION = """
       mappings:
         description:
           - Object with index mappings to be applied.
-          - Mappings can be added or updated, not deleted.
+          - Mappings can be added or updated (only some fields could be updated), not deleted.
           - Module at the time does not perform verification of unsupported operations (such as
             changing the type of a property, which can't be modified after the mapping was applied,
             or adding incompatible property parameter).
           - Operation of removing a property will be silently skipped by OpenSearch API.
         type: dict
         default: {}
+      aliases:
+        description:
+          - Object with index aliases to be applied.
+          - When option is skipped and O(force=false), no removal actions will be performed.
+          - When an alias is specified, all other aliases will be removed.
+          - OpenSearch API automatically expands V(routing) into V(index_routing) and V(search_routing)
+            so it is recommended to use explicitly V(index_routing) and V(search_routing) instead of V(routing)
+            for the sake of idempotency.
+        type: dict
+        default: {}
       force:
         description:
           - Force update of the index settings that can be changed only on a closed index.
-          - Therefore, index will be closed and opened back if needed.
+            Index will be closed and opened back only if needed (static settings were changed).
+          - Force deletion of aliases when O(aliases) is skipped and cluster index has some aliases.
         type: bool
         default: false
 """
@@ -233,6 +244,57 @@ def update_index_mappings(module: OpenSearchModule, existing_index: dict) -> tup
     return mappings_changed_flag, mappings_messages_list
 
 
+def update_index_aliases(module: OpenSearchModule, existing_index: dict) -> tuple[bool, list[str]]:
+    """
+    Find out which aliases need to be updated. Apply changes if needed.
+    Args:
+        module: OpenSearch(Ansible) module used to get wanted config and perform requests to cluster.
+        existing_index: Existing index information as returned by OpenSearch API.
+
+    Returns:
+        tuple of:
+            - bool: True if any aliases were changed, False otherwise.
+            - list[str]: List of messages indicating what was changed.
+    """
+    aliases_messages_list = []
+    name = module.params["name"]
+    force_remove = module.params["force"]
+
+    wanted_aliases = module.params["aliases"]
+    existing_aliases = existing_index[name]["aliases"]
+
+    aliases_changed_flag = params_differ(wanted_aliases, existing_aliases)
+
+    # Apply non-destructive changed to aliases
+    if aliases_changed_flag:
+        if not module.check_mode:
+            for alias_name, alias_content in wanted_aliases.items():
+                module.opensearch_request(
+                    alias_content, module.api_prefix + name + "/_aliases/" + alias_name, "PUT"
+                )
+        aliases_messages_list.append("aliases updated")
+
+    # Remove aliases that exist in the cluster index but missing in the Ansible config.
+    # But only when some aliases are defined in the Ansible config (to comply with the module docs).
+    aliases_for_deletion = [alias for alias in existing_aliases if alias not in wanted_aliases]
+
+    if (wanted_aliases != {} or force_remove) and len(aliases_for_deletion) > 0:
+        request_content = {"actions": [{
+            "remove": {
+                "index": name,
+                "alias": alias
+            }
+        } for alias in aliases_for_deletion]}
+        if not module.check_mode:
+            module.opensearch_request(
+                request_content, module.api_prefix + "_aliases", "POST"
+            )
+        aliases_changed_flag = True
+        aliases_messages_list.append("aliases removed")
+
+    return aliases_changed_flag, aliases_messages_list
+
+
 def main() -> None:
     module_argument_spec = dict(
         name=dict(type="str", required=True),
@@ -280,13 +342,9 @@ def main() -> None:
             changed_flag = changed_flag or mappings_changed
             result_messages.extend(mappings_messages)
 
-            # existing_mappings = existent_index[index_name]["mappings"]
-            # if params_differ(module.params["mappings"], existing_mappings):
-            #     request_body = module.params["mappings"]
-            #     if not module.check_mode:
-            #         module.opensearch_request(request_body, module.api_prefix + index_name + "/_mapping", "PUT")
-            #     changed_flag = True
-            #     module_result = {"message": f"'{index_name}' was updated.", "status": "UPDATED"}
+            aliases_changed, aliases_messages = update_index_aliases(module, existent_index)
+            changed_flag = changed_flag or aliases_changed
+            result_messages.extend(aliases_messages)
 
             if not changed_flag:
                 msgs = ["is up to date"]
@@ -297,25 +355,6 @@ def main() -> None:
                     "message": f"'{index_name}' was updated: {', '.join(result_messages)}.",
                     "status": "UPDATED",
                 }
-
-            # if params_differ(module.params["aliases"], existent_index["aliases"]):
-            #     request_body = module.params["mappings"]
-            #     module.opensearch_request(request_body, module.api_prefix + index_name + "/_mapping", "PUT")
-
-        # elif force_update or params_differ(index_parameters, existent_index):
-        #     patch_body = [
-        #         {
-        #             "op": "replace",
-        #             "path": "/" + index_name,
-        #             "value": index_parameters,
-        #         }
-        #     ]
-        #     if not module.check_mode:
-        #         module.opensearch_request(None, module.api_prefix, "PATCH")
-        #     module_result = {"message": f"'{index_name}' was updated.", "status": "UPDATED"}
-        #     changed_flag = True
-        # else:
-        #     module_result = {"message": f"'{index_name}' is up to date.", "status": "OK"}
     elif module.params["state"] == "absent":
         if existent_index:
             if not module.check_mode:
