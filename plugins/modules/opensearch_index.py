@@ -136,8 +136,8 @@ def update_index_settings(module: OpenSearchModule, existing_index: dict) -> tup
 
     Returns:
         tuple of:
-            - bool: True if any settings were changed, False otherwise
-            - list[str]: List of messages describing what settings were updated
+            - bool: True if any settings were changed, False otherwise.
+            - list[str]: List of messages describing what settings were updated.
     """
     settings_changed = False
     settings_messages = []
@@ -195,6 +195,35 @@ def update_index_settings(module: OpenSearchModule, existing_index: dict) -> tup
     return settings_changed, settings_messages
 
 
+def update_index_mappings(module: OpenSearchModule, existing_index: dict) -> tuple[bool, list[str]]:
+    """
+    Find out which mappings need to be updated. Apply changes if needed.
+    Args:
+        module: OpenSearch(Ansible) module used to get wanted config and perform requests to cluster.
+        existing_index: Existing index information as returned by OpenSearch API.
+
+    Returns:
+        tuple of:
+            - bool: True if any mappings were changed, False otherwise.
+            - list[str]: List of messages indicating what was changed.
+    """
+    mappings_messages = []
+    name = module.params["name"]
+
+    wanted_mappings = module.params["mappings"]
+    existing_mappings = existing_index[name]["mappings"]
+
+    mappings_changed = params_differ(wanted_mappings, existing_mappings)
+
+    if mappings_changed:
+        if not module.check_mode:
+            module.opensearch_request(
+                wanted_mappings, module.api_prefix + name + "/_mapping", "PUT"
+            )
+        mappings_messages.append("mappings updated")
+
+    return mappings_changed, mappings_messages
+
 def main() -> None:
     module_argument_spec = dict(
         name=dict(type="str", required=True),
@@ -237,6 +266,10 @@ def main() -> None:
             settings_chgd, settings_msgs = update_index_settings(module, existent_index)
             changed_flag = changed_flag or settings_chgd
             result_messages.extend(settings_msgs)
+
+            mappings_chgd, mappings_msgs = update_index_mappings(module, existent_index)
+            changed_flag = changed_flag or mappings_chgd
+            result_messages.extend(mappings_msgs)
 
             # existing_mappings = existent_index[index_name]["mappings"]
             # if params_differ(module.params["mappings"], existing_mappings):

@@ -9,7 +9,14 @@
         settings:
           number_of_shards: 3
           codec: "zstd"
-          number_of_replicas: 1
+          number_of_replicas: 3
+        mappings:
+          dynamic_templates:
+            - integers:
+                mapping:
+                  type: long
+                  ignore_malformed: true
+                match_mapping_type: long
         state: present
       register: checker_index
 
