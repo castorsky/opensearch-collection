@@ -1,0 +1,15 @@
+# Copyright (c) Castor Sky (@castorsky) <csky57@gmail.com>
+# License: GPL-3.0-or-later
+# GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
+
+testgroup:
+  hosts:
+    testhost:
+      ansible_host: podman.home.lan
+      ansible_network_os: castorsky.opensearch.opensearch
+      ansible_connection: httpapi
+      ansible_httpapi_port: 9200
+      ansible_httpapi_use_ssl: true
+      ansible_httpapi_validate_certs: false
+      ansible_user: admin
+      ansible_httpapi_pass: myStrongPassword123!

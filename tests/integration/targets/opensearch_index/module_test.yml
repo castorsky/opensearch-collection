@@ -1,0 +1,41 @@
+# Copyright (c) Castor Sky (@castorsky) <csky57@gmail.com>
+# License: GPL-3.0-or-later
+# GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
+
+---
+- name: Module test
+  hosts: testgroup
+  gather_facts: false
+  tasks:
+    - name: Create a simple OpenSearch index
+      register: result
+      castorsky.opensearch.opensearch_index:
+        name: "checker-index"
+        force: true
+        settings:
+          number_of_shards: 3
+          codec: "zstd"
+          number_of_replicas: 3
+        mappings:
+          dynamic_templates:
+            - strings:
+                mapping:
+                  ignore_above: 1024
+                  type: keyword
+                match_mapping_type: string
+            - integers:
+                mapping:
+                  type: long
+                  ignore_malformed: true
+                match_mapping_type: long
+        state: present
+
+    - debug:
+        var: result
+
+    - name: Assert that the index was created successfully
+      ansible.builtin.assert:
+        that:
+          - result.changed == true
+          - result.message.status == "CREATED"
+          - "'test-ansible-index' in result.message.message"

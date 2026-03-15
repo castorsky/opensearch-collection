@@ -1,0 +1,18 @@
+# Copyright (c) Castor Sky (@castorsky) <csky57@gmail.com>
+# License: GPL-3.0-or-later
+# GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
+
+---
+- name: Module test
+  hosts: testgroup
+  gather_facts: false
+  tasks:
+    - name: Retrieve info regarding cluster health info
+      castorsky.opensearch.opensearch_health_info:
+      register: result
+
+    - name: Assert that the health info was retrieved successfully
+      ansible.builtin.assert:
+        that:
+          - result.changed == false
+          - result.health is defined
